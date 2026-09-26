@@ -44,4 +44,3 @@ open PhoneAgent.xcodeproj
 已验证：设备发现、UI Tree、截图、打开 Settings、点击、输入、滑动。最终会话约 5 分钟，22 次连接，XCTest 0 failures；不代表长期或并行稳定性。见 [验收记录](docs/day1.md)、[路线分析与下一步](docs/next-steps.md)。原始日志与本地签名配置不上传。
 
 `PhoneAgent/` 是固定到 `4f0e201` 的 Git submodule，保留上游代码、历史和 MIT 许可。克隆已有仓库后可运行 `git submodule update --init --recursive` 获取源码。本项目的当前贡献是环境集成、验证和架构决策，未将上游实现标为原创。
-
