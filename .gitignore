@@ -1,0 +1,15 @@
+# Local device evidence may contain personal data and credentials visible in UI trees.
+/DAY1.md
+/day1-artifacts/
+.DS_Store
+.env
+.env.*
+!.env.example
+*.p12
+*.mobileprovision
+*.xcresult/
+DerivedData/
+build/
+.venv/
+__pycache__/
+
