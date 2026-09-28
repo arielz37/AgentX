@@ -1,6 +1,9 @@
 # Local device evidence may contain personal data and credentials visible in UI trees.
 /DAY1.md
 /day1-artifacts/
+/day2-artifacts/
+/day3-artifacts/
+/wellphone-data/
 .DS_Store
 .env
 .env.*

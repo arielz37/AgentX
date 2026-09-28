@@ -1,46 +1,40 @@
 # Wellphone
 
-探索用户正常使用手机时，Agent 在同一台手机完成真实任务且不抢屏幕、焦点与键盘。
+在同一台 iPhone 上输入计划、点执行、切回游戏；Mac 的 GPT 判断合理补齐与重要空缺，iPhone 用 EventKit 创建可执行事项并独立读回，回来查看真实报告。复用 [PhoneAgent](https://github.com/rounak/PhoneAgent) 的 RPC 与设备转发。
 
-**当前状态：Day 1 真机控制基线已通过；无干扰并行执行尚未实现。** 现有 UI 自动化会操作前台，不能作为最终题目的完成证明。优先复用 [PhoneAgent](https://github.com/rounak/PhoneAgent)，不重写设备 bridge。
+**Day 3 已真机验收：真实 GPT 解析后，用户玩王者时 4 项保存并验证；中文输入时混合计划 2 项完成、2 项重要信息不足未创建。连同手动继续场景，本轮新增 10 条，用户确认日历正确、无重复，游戏和输入体验正常。** 后台窗口有限，不能长期后台待命；没有录像/帧率结论。
 
 ```mermaid
 flowchart LR
-    A[Mac / 官方 rpc.py] --> B[127.0.0.1:45678 转发器]
-    B --> C[CoreDevice 隧道]
-    C --> D[真实 iPhone / XCTest RPC]
-    D --> E[前台 UI 控制：已验证]
-    D -. 待验证扩展 .-> F[原生语义操作 / 日历与提醒事项]
-    U[用户的 App / 屏幕 / 键盘] -. 必须保持独占 .-> G[无干扰验收]
+    I[iPhone 输入 / 点击执行] --> M[Mac worker / GPT 结构化理解]
+    M --> P[不可变计划 / 补齐与空缺来源]
+    P --> E[同台 iPhone EventKit / 保存与读回]
+    E --> R[手机报告 + Mac JSON]
+    G[用户游戏或中文输入] --- E
 ```
 
-## 部署 Day 1 基线
+## 启动
 
-需要 macOS、Xcode、Python 3、USB 连接的真实 iPhone。本次验证为 macOS 15.6.1 / Xcode 26.2 / Python 3.14.2 / iOS 26.6.1。
+需要 Xcode、Python 3、已配对真机及 Mac 本地 OpenAI API Key。
 
 ```bash
 git clone --recurse-submodules https://github.com/arielz37/Wellphone.git
-cd Wellphone/PhoneAgent
-open PhoneAgent.xcodeproj
+cd Wellphone
+bash scripts/apply_phoneagent_patch.sh
+open PhoneAgent/PhoneAgent.xcodeproj  # 为 targets 配置自己的 Signing
+python3 scripts/configure_model.py   # 隐藏输入 Key，保存在忽略的 .env
+xcrun xctrace list devices
+python3 scripts/start_native_host.py --udid <实际真机UDID>
+# 另一个终端：
+python3 scripts/wellphone_worker.py
 ```
 
-在 Xcode 为 `PhoneAgent` 和 `PhoneAgentUITests` 两个 Target 的 **Signing & Capabilities** 选择自己的 Team，并使用唯一 Bundle IDs。手机启用 **设置 → 隐私与安全性 → 开发者模式**；在 **设置 → 通用 → VPN 与设备管理** 信任开发者 App。自动化期间保持解锁、亮屏。
+安装启动仅在准备阶段进行，会打开宿主。手机点“准备连接和日历权限”，首次允许完全访问；在测试模式输入计划、点执行；可留在前台等待，也可切回游戏继续执行。无需逐项确认。回来打开执行报告，最后手动核对日历。
 
-```bash
-# 终端 A：选择列表中的真实 iPhone，等待 PHONEAGENT_RPC_READY
-./.agents/skills/phoneagent/scripts/start_rpc_bridge_local.sh
-# 终端 B：同样进入 PhoneAgent 目录
-./.agents/skills/phoneagent/scripts/rpc.py open-app com.apple.Preferences
-./.agents/skills/phoneagent/scripts/rpc.py get-tree
-./.agents/skills/phoneagent/scripts/rpc.py get-screen-image --print-metadata
-# 完成后正常结束
-./.agents/skills/phoneagent/scripts/rpc.py stop
-```
+## 配置与边界
 
-## 环境变量与范围
+`.env.example`：`OPENAI_API_KEY`、可选 `WELLPHONE_MODEL`（默认 `gpt-4.1-mini`）和 `HTTPS_PROXY`；密钥仅 Mac。RPC `127.0.0.1:45678`。最多 8 项、未来定时事件，暂不支持全天/邀请/提醒。系统可提前结束 45 秒应用窗口；过期保留计划，需用户主动继续。无 XCTest、音频保活或前台自动化回退。持久化防重不等于严格恰好一次；未知结果禁止自动重建。原始输入、日志、事件 ID 与个人签名仅保留本机。
 
-无需 API Key。可选 `PHONEAGENT_DEVELOPMENT_TEAM`（多 Team 时指定），`PHONEAGENT_DEVICE_DISCOVERY_TIMEOUT`（默认 5 秒）。RPC 默认 `127.0.0.1:45678`；客户端支持 `--host` / `--port`。CoreDevice 是本次实测路径；仅 USB 回退需要仓库文档中的 `pymobiledevice3`。
+[Day 3 实测报告](docs/day3-report.md) · [部署与限制](docs/day3.md) · [Day 2 真实证据](docs/day2.md) · [Day 1 基线](docs/day1.md)
 
-已验证：设备发现、UI Tree、截图、打开 Settings、点击、输入、滑动。最终会话约 5 分钟，22 次连接，XCTest 0 failures；不代表长期或并行稳定性。见 [验收记录](docs/day1.md)、[路线分析与下一步](docs/next-steps.md)。原始日志与本地签名配置不上传。
-
-`PhoneAgent/` 是固定到 `4f0e201` 的 Git submodule，保留上游代码、历史和 MIT 许可。克隆已有仓库后可运行 `git submodule update --init --recursive` 获取源码。本项目的当前贡献是环境集成、验证和架构决策，未将上游实现标为原创。
+上游固定 `4f0e201572c2cc6f36bab1e1f80c61878b4a90b7`，保留 MIT 归属。源码通过 `patches/phoneagent-day3.patch` 和配置脚本复现，无不可获取的 submodule 提交。验证：`python3 -m unittest discover -s tests -p 'test_*.py'`。

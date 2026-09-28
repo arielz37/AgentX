@@ -1,0 +1,432 @@
+--- /dev/null
++++ b/PhoneAgent/CalendarHostView.swift
+@@ -0,0 +1,123 @@
++import SwiftUI
++import UIKit
++
++// No XCTest import or UI automation session. A bounded, user-prepared import only.
++@MainActor
++final class CalendarHost: ObservableObject {
++    @Published var message = "准备连接 Mac"
++    @Published var ready = false
++    private let calendar = CalendarBridge(executionLocation: "iphone_native_app")
++    private var server: SimulatorRPCServer?
++    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
++    private var deadline: Date?
++    private var timer: Timer?
++
++    func start() {
++        guard server == nil, UIApplication.shared.applicationState == .active else { return }
++        do {
++            server = try SimulatorRPCServer(onReady: { _ in
++                print("WELLPHONE_NATIVE_RPC_READY port=45678")
++                Task { @MainActor in self.ready = true; self.message = "等待 Mac 授权、锁定和准备导入" }
++            }, onStop: {
++                Task { @MainActor in self.finish("导入会话结束，请在 Mac 查看真实结果") }
++            }, commandHandler: { [weak self] method, params in
++                guard let self else { throw NSError(domain: "Wellphone.Host", code: 1) }
++                return try await self.handle(method, params)
++            })
++            server?.start()
++        } catch { message = error.localizedDescription }
++    }
++
++    func armFromPhone() {
++        Task {
++            do { _ = try await handle("calendar_arm", [:]) }
++            catch { message = error.localizedDescription }
++        }
++    }
++
++    private func problem(_ message: String) -> NSError {
++        NSError(domain: "Wellphone.Host", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
++    }
++
++    private func hostStatus() -> [String: Any] {
++        let remaining = UIApplication.shared.backgroundTimeRemaining
++        return ["application_state": UIApplication.shared.applicationState == .active ? "foreground" : (UIApplication.shared.applicationState == .background ? "background" : "inactive"),
++                "background_budget_seconds": remaining.isFinite && remaining < 1e9 ? remaining : -1,
++                "import_armed": backgroundTask != .invalid,
++                "window_remaining_seconds": max(0, deadline?.timeIntervalSinceNow ?? 0)]
++    }
++
++    private func handle(_ method: String, _ params: [String: Any]) async throws -> (result: Any, shouldStop: Bool) {
++        if method == "stop" { return ([:], true) }
++        guard method.hasPrefix("calendar_") else { throw problem("Native host supports calendar RPC only") }
++        if method == "calendar_prepare" {
++            guard UIApplication.shared.applicationState == .active else {
++                throw problem("Permission preparation requires the host in foreground")
++            }
++        }
++        if method == "calendar_arm" {
++            guard calendar.isLocked, UIApplication.shared.applicationState == .active,
++                  backgroundTask == .invalid else { throw problem("Arm once in foreground after calendar_lock") }
++            // A short pending import, not a perpetual background service. The OS may grant
++            // less time than our 45-second cap. Never renew from the background.
++            backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Wellphone calendar import") { [weak self] in
++                Task { @MainActor in self?.finish("系统后台时间已到，未完成任务请在 Mac 检查") }
++            }
++            guard backgroundTask != .invalid else { throw problem("System denied background execution time") }
++            deadline = Date().addingTimeInterval(45)
++            timer = Timer.scheduledTimer(withTimeInterval: 45, repeats: false) { [weak self] _ in
++                Task { @MainActor in self?.finish("45 秒导入窗口已到；没有自动重试") }
++            }
++            message = "导入窗口已开启，请切到游戏/输入界面；系统可能提前结束窗口"
++            var status = try await calendar.handle("calendar_status", [:])
++            status["host"] = hostStatus()
++            return (status, false)
++        }
++        if method == "calendar_execute" {
++            guard backgroundTask != .invalid, let deadline, deadline > Date() else {
++                throw problem("import_window_expired_or_not_armed: prepare again in foreground; no writes attempted")
++            }
++            // Fail closed: this experiment must actually execute while the human's app is in front.
++            guard UIApplication.shared.applicationState == .background else {
++                throw problem("Host must be in background before executing the experiment")
++            }
++        }
++        var result = try await calendar.handle(method, params)
++        result["host"] = hostStatus()
++        // Finish the background assertion after the actual RPC response has been sent.
++        return (result, method == "calendar_execute")
++    }
++
++    private func finish(_ text: String) {
++        server?.stop(); server = nil
++        timer?.invalidate(); timer = nil
++        deadline = nil
++        if backgroundTask != .invalid {
++            UIApplication.shared.endBackgroundTask(backgroundTask)
++            backgroundTask = .invalid
++        }
++        ready = false; message = text
++    }
++}
++
++struct CalendarHostView: View {
++    @StateObject private var host = CalendarHost()
++    @Environment(\.scenePhase) private var phase
++    var body: some View {
++        VStack(alignment: .leading, spacing: 20) {
++            Text("Wellphone 日历实验").font(.largeTitle.bold())
++            Text(host.message)
++            Text("仅在有限后台窗口内完成一次导入。任务完成或时间到后停止。没有 XCTest 自动化水印，不使用音频保活。")
++                .foregroundStyle(.secondary)
++            Button("准备连接 Mac") { host.start() }.disabled(host.ready)
++            Button("开启一次导入窗口") { host.armFromPhone() }.disabled(!host.ready)
++            Text("授权完成后，由 Mac 开启窗口，再手动切到游戏或输入界面。结果在 Mac 显示。")
++                .font(.footnote)
++        }
++        .padding(24)
++        .onAppear { host.start() }
++        .onChange(of: phase) { _, newPhase in
++            if newPhase == .active && !host.ready { host.start() }
++        }
++    }
++}
+--- a/PhoneAgent/ContentView.swift
++++ b/PhoneAgent/ContentView.swift
+@@ -11,12 +11,15 @@
+ struct ContentView: View {
+     enum AppState {
+         case rpcBridge
++        case calendarHost
+         case enterAPIKey
+         case prompt(String)
+     }
+ 
+     private static func initialAppState() -> AppState {
+-        if ProcessInfo.processInfo.arguments.contains("--phoneagent-rpc-bridge") {
++        if ProcessInfo.processInfo.arguments.contains("--wellphone-calendar-host") {
++            .calendarHost
++        } else if ProcessInfo.processInfo.arguments.contains("--phoneagent-rpc-bridge") {
+             .rpcBridge
+         } else {
+             KeychainHelper.load().map { .prompt($0) } ?? .enterAPIKey
+@@ -28,6 +31,8 @@
+ 
+     var body: some View {
+         switch state {
++        case .calendarHost:
++            CalendarHostView()
+         case .rpcBridge:
+             RPCBridgeModeView()
+         case .enterAPIKey:
+--- a/PhoneAgent/Info.plist
++++ b/PhoneAgent/Info.plist
+@@ -2,6 +2,10 @@
+ <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+ <plist version="1.0">
+ <dict>
++	<key>NSCalendarsFullAccessUsageDescription</key>
++	<string>Wellphone creates test events and reads them back to verify execution.</string>
++	<key>NSLocalNetworkUsageDescription</key>
++	<string>Connect to the paired Mac to receive a calendar import task.</string>
+ 	<key>UIBackgroundModes</key>
+ 	<array>
+ 		<string>audio</string>
+--- /dev/null
++++ b/PhoneAgentUITests/CalendarBridge.swift
+@@ -0,0 +1,172 @@
++import EventKit
++import Foundation
++
++// EventKit runs inside the iPhone process (runner or native host), never on the Mac.
++// MainActor serializes synchronous writes; preparation is the only permission prompt.
++final class CalendarBridge {
++    private let executionLocation: String
++    init(executionLocation: String = "iphone_xctest_runner") { self.executionLocation = executionLocation }
++    private let sessionID = UUID().uuidString
++    private var store = EKEventStore()
++    private var preparing = false
++    private(set) var isLocked = false
++    private var ledger: [String: (payload: Data, result: [String: Any])] = [:]
++
++    private func now() -> String { Self.format(Date()) }
++    private static func format(_ date: Date) -> String {
++        let f = ISO8601DateFormatter()
++        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
++        return f.string(from: date)
++    }
++
++    private var authorized: Bool { EKEventStore.authorizationStatus(for: .event) == .fullAccess }
++    private func status() -> [String: Any] {
++        let auth = EKEventStore.authorizationStatus(for: .event)
++        let label: String
++        switch auth {
++        case .notDetermined: label = "not_determined"
++        case .restricted: label = "restricted"
++        case .denied: label = "denied"
++        case .fullAccess: label = "full_access"
++        case .writeOnly: label = "write_only"
++        @unknown default: label = "unknown"
++        }
++        return ["session_id": sessionID, "authorization": label, "calendar_only": isLocked,
++                "preparing": preparing, "device_time": now(), "execution_location": executionLocation,
++                "deduplication_scope": "this_runner_session_only", "ledger_items": ledger.count,
++                "runner_usage_description_present": Bundle.main.object(forInfoDictionaryKey: "NSCalendarsFullAccessUsageDescription") != nil]
++    }
++
++    @MainActor
++    func handle(_ method: String, _ params: [String: Any]) async throws -> [String: Any] {
++        switch method {
++        case "calendar_status": return status()
++        case "calendar_prepare":
++            guard !isLocked, !preparing else { throw failure("Preparation unavailable after lock or during another preparation") }
++            guard params["allow_permission_prompt"] as? Bool == true else {
++                throw failure("Preparation requires allow_permission_prompt=true; run before gaming")
++            }
++            preparing = true
++            defer { preparing = false }
++            if !authorized { _ = try await store.requestFullAccessToEvents() }
++            preparing = false
++            return status()
++        case "calendar_lock":
++            guard !preparing, authorized else { throw failure("Full calendar access is required before locking") }
++            isLocked = true // Irreversible for this runner session.
++            return status()
++        case "calendar_execute":
++            guard !preparing, isLocked else { throw failure("Prepare and lock the calendar-only session first") }
++            guard params["session_id"] as? String == sessionID else {
++                throw failure("session_mismatch: runner restarted or wrong session; do not automatically resend old tasks")
++            }
++            let taskID = try identifier(params["task_id"], name: "task_id")
++            guard let items = params["items"] as? [[String: Any]], (1...3).contains(items.count),
++                  Set(params.keys).isSubset(of: ["session_id", "task_id", "items"]) else {
++                throw failure("Expected session_id, task_id and 1...3 items only")
++            }
++            let received = now()
++            let results = items.map { executeItem(taskID: taskID, item: $0) }
++            let verified = results.filter { $0["status"] as? String == "verified" }.count
++            return ["session_id": sessionID, "task_id": taskID, "received_at": received,
++                    "completed_at": now(), "execution_location": executionLocation,
++                    "status": verified == items.count ? "verified" : (verified > 0 ? "partial" : "failed"),
++                    "items": results, "deduplication_scope": "this_runner_session_only"]
++        default: throw failure("Unknown calendar RPC")
++        }
++    }
++
++    private func failure(_ message: String) -> NSError {
++        NSError(domain: "Wellphone.Calendar", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
++    }
++    private func identifier(_ value: Any?, name: String) throws -> String {
++        guard let s = value as? String, s.range(of: "^[A-Za-z0-9_-]{1,80}$", options: .regularExpression) != nil else {
++            throw failure("\(name) must contain 1...80 ASCII letters, digits, underscores or hyphens")
++        }
++        return s
++    }
++
++    private func executeItem(taskID: String, item: [String: Any]) -> [String: Any] {
++        let received = now()
++        var result: [String: Any] = ["task_id": taskID, "item_id": item["item_id"] ?? NSNull(),
++            "request": item, "received_at": received, "saved_at": NSNull(), "verified_at": NSNull(),
++            "event_id": NSNull(), "readback": NSNull(), "error": NSNull(), "status": "failed",
++            "save_status": "not_attempted", "verification_status": "not_attempted", "deduplicated": false]
++        var key: String?
++        var payload: Data?
++        do {
++            let itemID = try identifier(item["item_id"], name: "item_id")
++            key = taskID + "/" + itemID
++            payload = try JSONSerialization.data(withJSONObject: item, options: [.sortedKeys])
++            if let prior = ledger[key!] {
++                guard prior.payload == payload else { throw failure("id_conflict: same task_id/item_id has different content") }
++                var replay = prior.result
++                replay["deduplicated"] = true
++                replay["retry_received_at"] = received
++                // A replay reports the original observation; it does not claim a new readback.
++                return replay
++            }
++            let request = try CalendarEventInput(item)
++            guard authorized else { throw failure("permission_missing: full access required; no prompt during execution") }
++            guard let calendar = store.defaultCalendarForNewEvents, calendar.allowsContentModifications else {
++                throw failure("No writable default calendar; configure Calendar manually before another session")
++            }
++            let event = EKEvent(eventStore: store)
++            event.calendar = calendar
++            event.title = request.title
++            event.startDate = request.start
++            event.endDate = request.end
++            event.timeZone = request.zone
++            event.isAllDay = false
++            event.alarms = []
++            event.recurrenceRules = nil
++            event.notes = "Wellphone Test task_id=\(taskID) item_id=\(itemID)"
++            // Record reservation before the side effect; a save error is conservatively not retried.
++            result["save_status"] = "attempted"
++            ledger[key!] = (payload!, result)
++            try store.save(event, span: .thisEvent, commit: true)
++            result["saved_at"] = now()
++            result["save_status"] = "saved"
++            result["status"] = "saved_unverified"
++            let eventID = event.eventIdentifier
++            result["event_id"] = eventID ?? NSNull() as Any
++            ledger[key!] = (payload!, result)
++
++            // Fresh store query by the saved identifier. Do not return the original EKEvent
++            // and call that verification. No enumeration of unrelated private events.
++            let reader = EKEventStore()
++            guard let eventID, let read = reader.event(withIdentifier: eventID) else {
++                throw failure("readback_missing: saved event could not be queried")
++            }
++            let readback: [String: Any] = ["title": read.title ?? "", "start_at": Self.format(read.startDate),
++                "end_at": Self.format(read.endDate), "time_zone": read.timeZone?.identifier ?? "",
++                "is_all_day": read.isAllDay, "alarm_count": read.alarms?.count ?? 0,
++                "attendee_count": read.attendees?.count ?? 0, "recurrence_count": read.recurrenceRules?.count ?? 0]
++            result["readback"] = readback
++            guard read.title == request.title,
++                  abs(read.startDate.timeIntervalSince(request.start)) < 1,
++                  abs(read.endDate.timeIntervalSince(request.end)) < 1,
++                  read.timeZone?.identifier == request.zone.identifier,
++                  !read.isAllDay, (read.alarms ?? []).isEmpty,
++                  (read.attendees ?? []).isEmpty, (read.recurrenceRules ?? []).isEmpty else {
++                throw failure("readback_mismatch: saved fields differ; inspect this event manually")
++            }
++            result["verified_at"] = now()
++            result["verification_status"] = "verified"
++            result["status"] = "verified"
++        } catch {
++            let e = error as NSError
++            result["error"] = ["message": e.localizedDescription, "domain": e.domain, "code": e.code]
++            if result["save_status"] as? String == "saved" {
++                result["verification_status"] = "failed"
++            } else if result["save_status"] as? String == "attempted" {
++                result["save_status"] = "unknown" // Do not assume a thrown save is safe to repeat.
++            }
++        }
++        // Never replace the ledger for a conflicting payload.
++        if let key, let payload, ledger[key] == nil || ledger[key]?.payload == payload {
++            ledger[key] = (payload, result)
++        }
++        return result
++    }
++}
+--- /dev/null
++++ b/PhoneAgentUITests/CalendarEventInput.swift
+@@ -0,0 +1,46 @@
++import Foundation
++
++// Kept independent of EventKit so time/schema validation can be exercised without writes.
++struct CalendarEventInput {
++    let title: String
++    let start: Date
++    let end: Date
++    let zone: TimeZone
++
++    init(_ item: [String: Any], now: Date = Date()) throws {
++        func invalid(_ text: String) -> NSError {
++            NSError(domain: "Wellphone.Validation", code: 1, userInfo: [NSLocalizedDescriptionKey: text])
++        }
++        guard Set(item.keys) == Set(["item_id", "title", "start_at", "end_at", "time_zone"]),
++              let title = item["title"] as? String, title.hasPrefix("Wellphone Test "), title.count <= 160,
++              let zoneName = item["time_zone"] as? String,
++              TimeZone.knownTimeZoneIdentifiers.contains(zoneName), let zone = TimeZone(identifier: zoneName) else {
++            throw invalid("Expected item_id/title/start_at/end_at/time_zone only; test title prefix and IANA time zone required")
++        }
++        func parse(_ value: Any?) throws -> Date {
++            guard let s = value as? String,
++                  s.range(of: #"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$"#, options: .regularExpression) != nil else {
++                throw invalid("Use ISO 8601 seconds with an explicit UTC offset, e.g. 2026-09-28T14:00:00+08:00")
++            }
++            let f = ISO8601DateFormatter()
++            guard let date = f.date(from: s) else { throw invalid("Invalid ISO 8601 date") }
++            // Reject normalized invalid dates and offsets inconsistent with the named zone.
++            let roundtrip = DateFormatter()
++            roundtrip.locale = Locale(identifier: "en_US_POSIX")
++            roundtrip.calendar = Calendar(identifier: .gregorian)
++            roundtrip.timeZone = zone
++            roundtrip.dateFormat = "yyyy-MM-dd'T'HH:mm:ssXXXXX"
++            guard roundtrip.string(from: date) == s else { throw invalid("Date or offset does not match time_zone") }
++            return date
++        }
++        let start = try parse(item["start_at"])
++        let end = try parse(item["end_at"])
++        var calendar = Calendar(identifier: .gregorian)
++        calendar.timeZone = zone
++        guard start >= calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))!,
++              end > start, end.timeIntervalSince(start) <= 86400 else {
++            throw invalid("Event must start after today, end after start and last at most 24 hours")
++        }
++        self.title = title; self.start = start; self.end = end; self.zone = zone
++    }
++}
+--- a/PhoneAgentUITests/PhoneAgentUITests.swift
++++ b/PhoneAgentUITests/PhoneAgentUITests.swift
+@@ -18,6 +18,7 @@
+     var lastRequest: OpenAIRequest?
+     var app: XCUIApplication?
+     private var rpcServer: SimulatorRPCServer?
++    let calendarBridge = CalendarBridge()
+ 
+     override func setUpWithError() throws {
+         continueAfterFailure = false
+@@ -69,8 +70,14 @@
+             },
+             commandHandler: { [weak self] method, parameters in
+                 guard let self else { throw PhoneAgent.Error.serverShutDown }
++                if method.hasPrefix("calendar_") {
++                    return (try await self.calendarBridge.handle(method, parameters), false)
++                }
+                 return try await MainActor.run {
+-                    try self.handleRPC(method: method, parameters: parameters)
++                    if self.calendarBridge.isLocked && method != "stop" {
++                        throw PhoneAgent.Error.invalidCommand("Calendar-only mode rejects \(method)")
++                    }
++                    return try self.handleRPC(method: method, parameters: parameters)
+                 }
+             }
+         )
+--- a/.agents/skills/phoneagent/scripts/start_rpc_bridge_local.sh
++++ b/.agents/skills/phoneagent/scripts/start_rpc_bridge_local.sh
+@@ -254,4 +254,12 @@
+   XCODEBUILD_ARGS+=("${XCODEBUILD_CODESIGN_ARGS[@]}")
+ fi
+ 
++# Optional preparation of the generated runner (e.g. modern privacy usage keys).
++# Keep device discovery, signing, forwarding and XCTest entry point unchanged.
++if [[ -n "${PHONEAGENT_RUNNER_PREPARE_SCRIPT:-}" ]]; then
++  XCODEBUILD_ARGS[1]=build-for-testing
++  "${XCODEBUILD_ARGS[@]}"
++  "$PYTHON" "$PHONEAGENT_RUNNER_PREPARE_SCRIPT" "$REPO_ROOT" "$IS_SIMULATOR"
++  XCODEBUILD_ARGS[1]=test-without-building
++fi
+ "${XCODEBUILD_ARGS[@]}"
