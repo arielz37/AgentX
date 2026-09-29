@@ -17,3 +17,5 @@ build/
 __pycache__/
 
 /alert-artifacts/
+
+/.wellphone-runtime/

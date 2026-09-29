@@ -17,7 +17,9 @@ flowchart LR
 
 ## 启动
 
-需要 Xcode、Python 3、已配对真机及 Mac 本地 OpenAI API Key。
+**日常使用：连接并解锁 iPhone，双击项目根目录的 [启动 Wellphone.command](启动%20Wellphone.command)，再手动打开手机 Wellphone。** 自动启动或复用转发器与 worker；使用期间保持服务窗口开启、Mac 不休眠。[详细说明与排错](docs/launcher.md)。
+
+首次部署需要 Xcode、Python 3.10+、已配对真机及 Mac 本地 OpenAI API Key：
 
 ```bash
 git clone --recurse-submodules https://github.com/arielz37/Wellphone.git
