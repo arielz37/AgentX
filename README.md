@@ -13,6 +13,8 @@ flowchart LR
     G[用户游戏或中文输入] --- E
 ```
 
+**自适应提醒更新：已实现并通过编译、离线回归和四组真实模型测试；真机前台三项事件与提醒已保存并独立读回；后台与通知触发尚待验收。** 旧任务保持无提醒。[规则与测试](docs/adaptive-alerts.md)。
+
 ## 启动
 
 需要 Xcode、Python 3、已配对真机及 Mac 本地 OpenAI API Key。
@@ -33,8 +35,8 @@ python3 scripts/wellphone_worker.py
 
 ## 配置与边界
 
-`.env.example`：`OPENAI_API_KEY`、可选 `WELLPHONE_MODEL`（默认 `gpt-4.1-mini`）和 `HTTPS_PROXY`；密钥仅 Mac。RPC `127.0.0.1:45678`。最多 8 项、未来定时事件，暂不支持全天/邀请/提醒。系统可提前结束 45 秒应用窗口；过期保留计划，需用户主动继续。无 XCTest、音频保活或前台自动化回退。持久化防重不等于严格恰好一次；未知结果禁止自动重建。原始输入、日志、事件 ID 与个人签名仅保留本机。
+`.env.example`：`OPENAI_API_KEY`、可选 `WELLPHONE_MODEL`（默认 `gpt-4.1-mini`）和 `HTTPS_PROXY`；密钥仅 Mac。RPC `127.0.0.1:45678`。最多 8 项、未来定时事件，支持用户指定或模型建议的最多两次时间提醒；暂不支持全天/邀请/位置提醒。系统可提前结束 45 秒应用窗口；过期保留计划，需用户主动继续。无 XCTest、音频保活或前台自动化回退。持久化防重不等于严格恰好一次；未知结果禁止自动重建。原始输入、日志、事件 ID 与个人签名仅保留本机。
 
 [Day 3 实测报告](docs/day3-report.md) · [部署与限制](docs/day3.md) · [Day 2 真实证据](docs/day2.md) · [Day 1 基线](docs/day1.md)
 
-上游固定 `4f0e201572c2cc6f36bab1e1f80c61878b4a90b7`，保留 MIT 归属。源码通过 `patches/phoneagent-day3.patch` 和配置脚本复现，无不可获取的 submodule 提交。验证：`python3 -m unittest discover -s tests -p 'test_*.py'`。
+上游固定 `4f0e201572c2cc6f36bab1e1f80c61878b4a90b7`，保留 MIT 归属。源码通过 `patches/phoneagent-alerts.patch` 和配置脚本复现，无不可获取的 submodule 提交。验证：`python3 -m unittest discover -s tests -p 'test_*.py'`。

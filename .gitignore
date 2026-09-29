@@ -15,3 +15,5 @@ DerivedData/
 build/
 .venv/
 __pycache__/
+
+/alert-artifacts/

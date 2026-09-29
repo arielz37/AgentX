@@ -1,0 +1,135 @@
+{
+  "recorded_at": "2026-09-29T09:24:47.348223+00:00",
+  "feature": "adaptive_calendar_alerts",
+  "implemented": true,
+  "build": {
+    "target": "PhoneAgent native iOS app",
+    "result": "BUILD SUCCEEDED",
+    "code_signing": "existing local signing preserved; signed device build succeeded",
+    "installed_on_phone": true
+  },
+  "automated_validation": {
+    "python_tests": 28,
+    "python_result": "passed",
+    "swift_suites": [
+      "event parameter validation",
+      "Day 3 plan and lifecycle regression",
+      "adaptive reminder policy including DST and equivalence",
+      "actual CalendarBridge with test-only EventKit module"
+    ],
+    "swift_result": "passed",
+    "real_calendar_writes_in_automated_tests": false
+  },
+  "real_model_probes": [
+    {
+      "name": "explicit",
+      "status": "passed",
+      "seconds": 12.974,
+      "semantic_errors": []
+    },
+    {
+      "name": "scope",
+      "status": "passed",
+      "seconds": 8.673,
+      "semantic_errors": []
+    },
+    {
+      "name": "absolute_count",
+      "status": "passed",
+      "seconds": 8.665,
+      "semantic_errors": []
+    },
+    {
+      "name": "suggested",
+      "status": "passed",
+      "seconds": 5.687,
+      "semantic_errors": []
+    }
+  ],
+  "reproduction": {
+    "fresh_pinned_upstream": "passed",
+    "day2_upgrade": "passed",
+    "day3_upgrade": "passed",
+    "project_membership_idempotence": "passed",
+    "personal_signing_preserved": true
+  },
+  "device": {
+    "connected_phone_detected": true,
+    "ready_for_install_confirmed": true,
+    "launch_status": "connected",
+    "authorization": "full_access"
+  },
+  "real_phone_event_and_alert_readback": "foreground_three_items_passed; background_not_tested",
+  "human_calendar_check": "User reports first test calendar output normal; individual alert UI times not separately confirmed.",
+  "notification_delivery": "not_observed",
+  "known_limits": [
+    "Model semantics can still be wrong despite valid schema.",
+    "No guarantee of notification delivery.",
+    "Two-alert product limit requires target-calendar device verification.",
+    "Five-minute lead policy; elapsed reminders are not moved.",
+    "Finite execution window retained.",
+    "Persistent dedup is not an exactly-once transaction."
+  ],
+  "foreground_acceptance": {
+    "state": "verified",
+    "model_seconds": 9.723,
+    "application_state": "foreground",
+    "items": [
+      {
+        "item_id": "i1",
+        "title": "Wellphone Test 练琴",
+        "start_at": "2026-10-02T06:00:00.000Z",
+        "end_at": "2026-10-02T07:00:00.000Z",
+        "event_verification": "verified",
+        "status": "verified",
+        "mode": "explicit",
+        "requested_offsets": [
+          -86400,
+          -7200
+        ],
+        "actual_offsets": [
+          -7200,
+          -86400
+        ],
+        "alert_verification": "verified",
+        "user_requirement_status": "met"
+      },
+      {
+        "item_id": "i2",
+        "title": "Wellphone Test 整理书架",
+        "start_at": "2026-10-03T07:00:00.000Z",
+        "end_at": "2026-10-03T08:00:00.000Z",
+        "event_verification": "verified",
+        "status": "verified",
+        "mode": "suggested",
+        "requested_offsets": [
+          -3600
+        ],
+        "actual_offsets": [
+          -3600
+        ],
+        "alert_verification": "verified",
+        "user_requirement_status": "not_specified"
+      },
+      {
+        "item_id": "i3",
+        "title": "Wellphone Test 散步",
+        "start_at": "2026-10-04T08:00:00.000Z",
+        "end_at": "2026-10-04T09:00:00.000Z",
+        "event_verification": "verified",
+        "status": "verified",
+        "mode": "disabled",
+        "requested_offsets": [],
+        "actual_offsets": [],
+        "alert_verification": "verified",
+        "user_requirement_status": "met"
+      }
+    ]
+  },
+  "background_user_observation": "User clarified second test was not performed and requested stopping further tests.",
+  "reminder_retry_test": "Not completed: preliminary status read timed out before replay/conflict requests; further testing deferred by user.",
+  "background_acceptance": {
+    "status": "not_performed",
+    "reason": "user_deferred_to_manual_testing"
+  }
+}

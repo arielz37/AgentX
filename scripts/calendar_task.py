@@ -48,6 +48,14 @@ def report(document):
         if item.get("readback"):
             readback = item["readback"]
             lines.append(f"实际读回：{readback['start_at']} → {readback['end_at']}（{readback['time_zone']}）")
+        if item.get("alerts"):
+            a = item["alerts"]
+            lines += ["提醒原请求：" + json.dumps(a["requested"], ensure_ascii=False),
+                      "准备写入：" + json.dumps(a["configured"], ensure_ascii=False),
+                      "逐条处理：" + json.dumps(a["decisions"], ensure_ascii=False),
+                      "提醒读回：" + json.dumps(a.get("readback"), ensure_ascii=False),
+                      f"提醒验证：{a['verification_status']}；用户要求：{a['user_requirement_status']}",
+                      "提醒已配置不等于通知已送达。"]
         if item.get("error"):
             lines.append("错误：" + item["error"]["message"])
     lines += ["", "完整请求、事件标识、实际读回字段和错误见同名 JSON。",

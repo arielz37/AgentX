@@ -45,6 +45,23 @@ def markdown(doc):
                   '保存：' + row.get('save_status', '未知' if job.get('state') in ('unknown', 'executing') else '未尝试') + '；独立读回：' + row.get('verification_status', '未知' if job.get('state') in ('unknown', 'executing') else '未尝试')]
         for name, f in fields.items():
             lines.append(f"- {name}：{f['value'] or '空缺'} [{f['source']}]；{f['reason']}；阻止创建={f['blocks_creation']}")
+        alerts = item.get('alerts')
+        if alerts is None:
+            lines.append('历史无提醒计划；不作新版提醒验收声明。')
+        else:
+            lines += ['提醒模式：' + alerts['mode'], '提醒依据：' + alerts['reason'],
+                      '原始提醒请求：' + json.dumps(alerts, ensure_ascii=False)]
+            actual = row.get('alerts')
+            if actual:
+                lines += ['事件字段验证：' + row.get('event_verification_status', '未验证'),
+                          '提醒配置验证：' + actual['verification_status'],
+                          '用户提醒要求满足：' + actual['user_requirement_status'],
+                          '实际准备写入：' + json.dumps(actual['configured'], ensure_ascii=False),
+                          '逐条处理：' + json.dumps(actual['decisions'], ensure_ascii=False),
+                          '策略原因：' + str(actual.get('policy_reason')),
+                          '实际提醒读回：' + json.dumps(actual.get('readback'), ensure_ascii=False)]
+            else: lines.append('提醒尚未执行，不能将请求或建议当作已配置。')
+            lines.append('提醒配置成功不等于未来通知已送达；通知展示受系统日历通知、专注模式等设置影响。')
         if row.get('readback'): lines.append('实际读回：' + json.dumps(row['readback'], ensure_ascii=False))
         if row.get('error'): lines.append('错误：' + json.dumps(row['error'], ensure_ascii=False))
         lines.append('')

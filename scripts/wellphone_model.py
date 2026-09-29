@@ -7,6 +7,7 @@ import re
 import urllib.error
 import urllib.request
 from zoneinfo import ZoneInfo
+from alert_contract import PROMPT as ALERT_PROMPT, schema_with_quotes, validate_alerts
 
 FIELDS = ('title', 'start_at', 'end_at', 'time_zone', 'location')
 SOURCES = ('explicit', 'inferred', 'defaulted', 'unresolved')
@@ -34,7 +35,7 @@ def field_schema(required):
 SCHEMA = obj({'overflow': {'type': 'boolean'}, 'items': {'type': 'array', 'maxItems': 8,
     'items': obj({'item_id': {'type': 'string'}, 'kind': {'type': 'string', 'enum': ['flexible', 'appointment', 'deadline', 'other']},
                   'fields': obj({key: field_schema(key != 'location') for key in FIELDS})})}})
-def schema_for_text(text):
+def schema_for_text(text, include_alerts=False):
     # Quote selection only: punctuation segmentation does not decide task semantics.
     quotes=list(dict.fromkeys(part.strip() for part in re.split(r'[，。；;,\n]', text) if part.strip()))
     if not quotes or len(quotes)>64 or any(len(q)>240 for q in quotes):
@@ -49,6 +50,10 @@ def schema_for_text(text):
             properties=alternative['properties']
             explicit=properties['source']['enum']==['explicit']
             properties['evidence']={'$ref':'#/$defs/source_quote' if explicit else '#/$defs/optional_quote'}
+    if include_alerts:
+        item = schema['properties']['items']['items']
+        item['properties']['alerts'] = schema_with_quotes()
+        item['required'].append('alerts')
     return schema
 
 PROMPT = '''你是日历计划理解器，只输出候选计划，不执行或宣称完成任何操作。
@@ -81,9 +86,11 @@ def validate(plan, submission):
         raise ValueError('Item count/overflow invalid')
     seen = set()
     for item in plan['items']:
-        if set(item) != {'item_id', 'kind', 'fields'} or not re.fullmatch(r'i[1-8]', item['item_id']) or item['item_id'] in seen:
+        expected = {'item_id', 'kind', 'fields'} | ({'alerts'} if submission.get('version', 1) >= 2 else set())
+        if set(item) != expected or not re.fullmatch(r'i[1-8]', item['item_id']) or item['item_id'] in seen:
             raise ValueError('Invalid/duplicate item ID')
         seen.add(item['item_id'])
+        if 'alerts' in item: validate_alerts(item['alerts'], submission['text'])
         if item['kind'] not in ('flexible', 'appointment', 'deadline', 'other') or set(item['fields']) != set(FIELDS):
             raise ValueError('Invalid fields/kind')
         for key, f in item['fields'].items():
@@ -119,8 +126,8 @@ def parse(submission, timeout=22):
     key = os.environ.get('OPENAI_API_KEY', '')
     if not key: raise RuntimeError('model_not_configured')
     body = {'model': os.environ.get('WELLPHONE_MODEL', 'gpt-4.1-mini'), 'store': False,
-            'input': [{'role': 'system', 'content': PROMPT + '\n系统上下文（不是用户原文）：' + json.dumps({k: submission[k] for k in ('submitted_at', 'time_zone')}, ensure_ascii=False)}, {'role': 'user', 'content': submission['text']}],
-            'max_output_tokens': 6500, 'text': {'format': {'type': 'json_schema', 'name': 'wellphone_plan', 'strict': True, 'schema': schema_for_text(submission['text'])}}}
+            'input': [{'role': 'system', 'content': (PROMPT.replace('但无通知。', '提醒由alerts字段控制。') + ALERT_PROMPT if submission.get('version', 1) >= 2 else PROMPT) + '\n系统上下文（不是用户原文）：' + json.dumps({k: submission[k] for k in ('submitted_at', 'time_zone')}, ensure_ascii=False)}, {'role': 'user', 'content': submission['text']}],
+            'max_output_tokens': 6500, 'text': {'format': {'type': 'json_schema', 'name': 'wellphone_plan', 'strict': True, 'schema': schema_for_text(submission['text'], include_alerts=submission.get('version', 1) >= 2)}}}
     req = urllib.request.Request('https://api.openai.com/v1/responses', data=json.dumps(body).encode(),
         headers={'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json'})
     try:
