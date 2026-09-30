@@ -1,27 +1,24 @@
-# Local device evidence may contain personal data and credentials visible in UI trees.
-/DAY1.md
-/day1-artifacts/
-/day2-artifacts/
-/day3-artifacts/
-/wellphone-data/
-.DS_Store
+# Private configuration, signing and local execution evidence
 .env
 .env.*
 !.env.example
+Signing.local.xcconfig
 *.p12
+*.p8
 *.mobileprovision
-*.xcresult/
-DerivedData/
+/.runtime/
+/artifacts/
+/data/
+/.local-archive/
+/.agentx-migration-staging/
+
+# Generated files
+.DS_Store
 build/
+DerivedData/
+*.xcresult/
 .venv/
 __pycache__/
-
-/alert-artifacts/
-
-/.wellphone-runtime/
-
-/calendar-features-artifacts/
-
-/temporal-artifacts/
-
-/model-review-artifacts/
+*.pyc
+*.xcuserstate
+xcuserdata/

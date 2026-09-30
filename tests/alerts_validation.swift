@@ -57,7 +57,7 @@ import Foundation
         precondition(!AlertPolicy.matches(expected, expected, unsupported: true))
         precondition(!AlertPolicy.matches(expected, [expected[0], expected[0]]))
         precondition(AlertPolicy.matches([], []))
-        let raw: [String: Any] = ["item_id": "i1", "title": "Wellphone Test", "alerts": two.wire]
+        let raw: [String: Any] = ["item_id": "i1", "title": "AgentX Test", "alerts": two.wire]
         var reordered = raw; var a = two.wire; a["items"] = Array((a["items"] as! [[String: Any]]).reversed()); reordered["alerts"] = a
         let c1 = try AlertPolicy.canonicalPayload(raw), c2 = try AlertPolicy.canonicalPayload(reordered)
         precondition(c1 == c2)

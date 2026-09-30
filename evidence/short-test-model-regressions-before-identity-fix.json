@@ -1,0 +1,221 @@
+[
+  {
+    "case": "casual_all_day_route",
+    "passed": true,
+    "result": {
+      "route": {
+        "kind": "calendar_schedule",
+        "message": "将先查询您下周的整天空闲情况，再帮您安排整理家里物品的整天任务。",
+        "supported": [
+          "calendar"
+        ],
+        "unsupported": []
+      },
+      "plan": null,
+      "query": {
+        "mode": "free_slots",
+        "start_at": "2026-10-05T00:00:00+08:00",
+        "end_at": "2026-10-12T00:00:00+08:00",
+        "time_zone": "Asia/Shanghai",
+        "duration_minutes": 60,
+        "day_start_minute": 0,
+        "day_end_minute": 1440,
+        "assumptions": [
+          "因用户明确需要一整天整理，故查询时段为全天（00:00–24:00）。",
+          "全天活动持续时间用全天类型表示，duration_minutes为占位，通常设为60分钟。"
+        ],
+        "slot_kind": "all_day",
+        "duration_days": 1
+      },
+      "schedule_request": {
+        "time_authority": "self_directed",
+        "reason": "用户可自行决定具体整理时间，需先查询空闲安排。",
+        "items": [
+          {
+            "item_id": "i1",
+            "title": "整理家里东西",
+            "evidence": "下周帮我找一天整理下家里的东西吧，估计得弄一整天。挑个没安排的日子，不用提醒我。"
+          }
+        ]
+      }
+    },
+    "model": "gpt-4.1-mini-2025-04-14",
+    "elapsed": 11.82
+  },
+  {
+    "case": "repeated_request_still_reads_current_availability",
+    "passed": true,
+    "result": {
+      "route": {
+        "kind": "calendar_schedule",
+        "message": "将先查询下周无日程的空闲日期，再帮你安排一整天的整理家务任务。",
+        "supported": [
+          "calendar"
+        ],
+        "unsupported": []
+      },
+      "plan": null,
+      "query": {
+        "mode": "free_slots",
+        "start_at": "2026-10-05T00:00:00+08:00",
+        "end_at": "2026-10-12T00:00:00+08:00",
+        "time_zone": "Asia/Shanghai",
+        "duration_minutes": 480,
+        "day_start_minute": 0,
+        "day_end_minute": 1440,
+        "assumptions": [
+          "默认寻找下一周一天的全天空闲时间，持续约8小时"
+        ],
+        "slot_kind": "all_day",
+        "duration_days": 1
+      },
+      "schedule_request": {
+        "time_authority": "self_directed",
+        "reason": "用户希望选择下周无安排的一整天整理家务",
+        "items": [
+          {
+            "item_id": "i1",
+            "title": "整理下家里的东西",
+            "evidence": "整理下家里的东西"
+          }
+        ]
+      }
+    },
+    "model": "gpt-4.1-mini-2025-04-14",
+    "elapsed": 5.46
+  },
+  {
+    "case": "followup_targets_recent_saved_unverified",
+    "passed": true,
+    "result": {
+      "route": {
+        "kind": "calendar_mutation",
+        "message": "准备修改之前创建的整理任务标题及备注，先读取相关日程确认。",
+        "supported": [
+          "calendar"
+        ],
+        "unsupported": []
+      },
+      "plan": null,
+      "query": {
+        "mode": "events",
+        "start_at": "2026-10-06T00:00:00+08:00",
+        "end_at": "2026-10-07T00:00:00+08:00",
+        "time_zone": "Asia/Shanghai",
+        "duration_minutes": 60,
+        "day_start_minute": 0,
+        "day_end_minute": 1440,
+        "assumptions": [
+          "用户要求修改2026年10月6日全天整理下家里的东西事件，含标题及备注，其他不变。"
+        ],
+        "slot_kind": "all_day",
+        "duration_days": 1
+      },
+      "schedule_request": null
+    },
+    "model": "gpt-4.1-mini-2025-04-14",
+    "elapsed": 4.48
+  },
+  {
+    "case": "casual_all_day_rename_and_notes_only",
+    "passed": false,
+    "result": {
+      "source_id": "snapshot-short",
+      "decision": "execute",
+      "message": "准备将最近的全天事件标题改为“整理书房”，并添加备注“先收拾书架，再整理电脑里的文件”。其他信息保持不变。",
+      "actions": [
+        {
+          "item_id": "i1",
+          "target_ref": "recent-event",
+          "operation": "update",
+          "scope": "this_event",
+          "patch": {
+            "title": "整理书房",
+            "start_at": null,
+            "end_at": null,
+            "time_zone": null,
+            "is_all_day": null,
+            "location": null,
+            "notes": "先收拾书架，再整理电脑里的文件",
+            "url": null,
+            "reminder_offsets_seconds": null
+          }
+        }
+      ]
+    },
+    "model": "gpt-4.1-mini-2025-04-14",
+    "elapsed": 3.77
+  },
+  {
+    "case": "manual_deletion_is_normal_not_found",
+    "passed": true,
+    "result": {
+      "source_id": "snapshot-short",
+      "decision": "not_found",
+      "message": "当前没有找到与“刚才那个”对应的日历事件，可能已被删除或改期。请确认事件是否存在或提供更多信息。",
+      "actions": []
+    },
+    "model": "gpt-4.1-mini-2025-04-14",
+    "elapsed": 5.46
+  },
+  {
+    "case": "manual_date_edit_is_preserved",
+    "passed": false,
+    "result": {
+      "source_id": "snapshot-short",
+      "decision": "execute",
+      "message": "准备将最近事件标题改为'整理书房'，备注改为'先收拾书架，再整理电脑里的文件'，其他字段保持不变。事件日期为2026-10-07全天。",
+      "actions": [
+        {
+          "item_id": "i1",
+          "target_ref": "recent-event",
+          "operation": "update",
+          "scope": "this_event",
+          "patch": {
+            "title": "整理书房",
+            "start_at": null,
+            "end_at": null,
+            "time_zone": null,
+            "is_all_day": null,
+            "location": null,
+            "notes": "先收拾书架，再整理电脑里的文件",
+            "url": null,
+            "reminder_offsets_seconds": null
+          }
+        }
+      ]
+    },
+    "model": "gpt-4.1-mini-2025-04-14",
+    "elapsed": 3.71
+  },
+  {
+    "case": "indistinguishable_duplicates_require_clarification",
+    "passed": false,
+    "result": {
+      "source_id": "snapshot-short",
+      "decision": "execute",
+      "message": "准备更新最近一次整理下家里的东西事件，修改标题和备注，保持其他信息不变。",
+      "actions": [
+        {
+          "item_id": "i1",
+          "target_ref": "recent-event",
+          "operation": "update",
+          "scope": "this_event",
+          "patch": {
+            "title": "整理书房",
+            "start_at": null,
+            "end_at": null,
+            "time_zone": null,
+            "is_all_day": null,
+            "location": null,
+            "notes": "先收拾书架，再整理电脑里的文件。",
+            "url": null,
+            "reminder_offsets_seconds": null
+          }
+        }
+      ]
+    },
+    "model": "gpt-4.1-mini-2025-04-14",
+    "elapsed": 4.19
+  }
+]

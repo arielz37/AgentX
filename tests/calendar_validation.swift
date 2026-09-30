@@ -3,7 +3,7 @@ import Foundation
 @main struct ValidationChecks {
     static func main() throws {
         let now = ISO8601DateFormatter().date(from: "2026-09-27T12:00:00Z")!
-        let valid: [String: Any] = ["item_id": "piano", "title": "Wellphone Test piano",
+        let valid: [String: Any] = ["item_id": "piano", "title": "AgentX Test piano",
             "start_at": "2026-09-28T14:00:00+08:00", "end_at": "2026-09-28T15:00:00+08:00", "time_zone": "Asia/Shanghai"]
         _ = try CalendarEventInput(valid, now: now)
         let invalid: [(String, Any)] = [

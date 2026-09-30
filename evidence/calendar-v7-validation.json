@@ -1,0 +1,20 @@
+{
+  "scope": "AgentX RPC5 / task v7",
+  "python_tests": 63,
+  "swift_validation_programs": 8,
+  "eventkit_test_double_programs": 4,
+  "synthetic_live_model_cases": 7,
+  "synthetic_live_model_passed": 7,
+  "signed_ios_target_build": "passed",
+  "device_installation": "installed_and_launched",
+  "real_device_v7_acceptance": "connection_verified_business_flows_pending",
+  "real_calendar_data_used_in_model_probes": false,
+  "notes": [
+    "EventKit test doubles are not device acceptance.",
+    "Historical v6 success is not v7 verification.",
+    "Pre-fix synthetic model failures are retained in neighboring evidence files."
+  ],
+  "mac_service": "restarted",
+  "installed_protocol_version": 5,
+  "device_calendar_authorization": "full_access"
+}

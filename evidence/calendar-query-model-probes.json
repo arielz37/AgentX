@@ -1,0 +1,230 @@
+{
+  "synthetic_only": true,
+  "phone_rpc_calls": 0,
+  "reference": "2030-09-27T12:00:00Z",
+  "cases": [
+    {
+      "text": "明天有哪些安排？",
+      "expected": "events",
+      "passed": true,
+      "response": {
+        "route": {
+          "kind": "calendar_query",
+          "message": "正在查询明天的日程安排。",
+          "supported": [
+            "calendar"
+          ],
+          "unsupported": []
+        },
+        "plan": null,
+        "query": {
+          "mode": "events",
+          "start_at": "2030-09-28T00:00:00+08:00",
+          "end_at": "2030-09-29T00:00:00+08:00",
+          "time_zone": "Asia/Shanghai",
+          "duration_minutes": 60,
+          "day_start_minute": 0,
+          "day_end_minute": 1440,
+          "assumptions": [
+            "默认查询明天全天的日程安排"
+          ]
+        }
+      },
+      "review_status": "passed",
+      "elapsed_seconds": 4.65
+    },
+    {
+      "text": "下周一到周五，每天14点到18点，找至少90分钟的空档。",
+      "expected": "free_slots",
+      "passed": true,
+      "response": {
+        "route": {
+          "kind": "calendar_query",
+          "message": "查询下周一到周五14点到18点的至少90分钟空档。",
+          "supported": [
+            "calendar"
+          ],
+          "unsupported": []
+        },
+        "plan": null,
+        "query": {
+          "mode": "free_slots",
+          "start_at": "2030-09-30T14:00:00+08:00",
+          "end_at": "2030-10-05T00:00:00+08:00",
+          "time_zone": "Asia/Shanghai",
+          "duration_minutes": 90,
+          "day_start_minute": 840,
+          "day_end_minute": 1080,
+          "assumptions": [
+            "默认下周一到周五为查询日期",
+            "假设每日14点到18点为查找空档时间段"
+          ]
+        }
+      },
+      "review_status": "corrected",
+      "elapsed_seconds": 6.52
+    },
+    {
+      "text": "2030年10月2日下午三点到四点有没有安排冲突？",
+      "expected": "conflicts",
+      "passed": true,
+      "response": {
+        "route": {
+          "kind": "calendar_query",
+          "message": "查询2030年10月2日下午三点到四点的日程冲突情况。",
+          "supported": [
+            "calendar"
+          ],
+          "unsupported": []
+        },
+        "plan": null,
+        "query": {
+          "mode": "conflicts",
+          "start_at": "2030-10-02T15:00:00+08:00",
+          "end_at": "2030-10-02T16:00:00+08:00",
+          "time_zone": "Asia/Shanghai",
+          "duration_minutes": 60,
+          "day_start_minute": 0,
+          "day_end_minute": 1440,
+          "assumptions": [
+            "查询指定时间段的冲突情况"
+          ]
+        }
+      },
+      "review_status": "passed",
+      "elapsed_seconds": 6.33
+    },
+    {
+      "text": "查询未来一整年的全部日程。",
+      "expected": "clarify",
+      "passed": true,
+      "response": {
+        "route": {
+          "kind": "clarify",
+          "message": "一次查询未来一整年超过最大支持天数31天，请缩短查询范围后再试。",
+          "supported": [],
+          "unsupported": []
+        },
+        "plan": null,
+        "query": null
+      },
+      "review_status": "passed",
+      "elapsed_seconds": 3.84
+    },
+    {
+      "text": "明天下午两点到三点练琴，不用提醒。",
+      "expected": "calendar",
+      "passed": true,
+      "response": {
+        "route": {
+          "kind": "calendar",
+          "message": "已识别练琴计划，设置为明天下午两点到三点，不设置提醒。",
+          "supported": [
+            "calendar"
+          ],
+          "unsupported": []
+        },
+        "plan": {
+          "overflow": false,
+          "items": [
+            {
+              "item_id": "i1",
+              "kind": "appointment",
+              "fields": {
+                "title": {
+                  "value": "练琴",
+                  "source": "inferred",
+                  "evidence": null,
+                  "reason": "根据用户意图推断活动标题",
+                  "critical": false,
+                  "blocks_creation": false
+                },
+                "start_at": {
+                  "value": "2030-09-28T14:00:00+08:00",
+                  "source": "explicit",
+                  "evidence": "明天下午两点到三点练琴",
+                  "reason": "用户明确指定开始时间",
+                  "critical": true,
+                  "blocks_creation": false
+                },
+                "end_at": {
+                  "value": "2030-09-28T15:00:00+08:00",
+                  "source": "explicit",
+                  "evidence": "明天下午两点到三点练琴",
+                  "reason": "用户明确指定结束时间",
+                  "critical": true,
+                  "blocks_creation": false
+                },
+                "time_zone": {
+                  "value": "Asia/Shanghai",
+                  "source": "inferred",
+                  "evidence": null,
+                  "reason": "使用手机提交时区",
+                  "critical": true,
+                  "blocks_creation": false
+                },
+                "location": {
+                  "value": null,
+                  "source": "unresolved",
+                  "evidence": null,
+                  "reason": "用户未指定地点",
+                  "critical": false,
+                  "blocks_creation": false
+                }
+              },
+              "alerts": {
+                "mode": "disabled",
+                "evidence": "不用提醒",
+                "reason": "用户明确表示不需要提醒",
+                "count_limit": 0,
+                "no_extra": true,
+                "overflow": false,
+                "items": []
+              },
+              "calendar": {
+                "is_all_day": false,
+                "notes": null,
+                "url": null,
+                "recurrence": {
+                  "mode": "none",
+                  "frequency": null,
+                  "interval": 1,
+                  "weekdays": [],
+                  "month_days": [],
+                  "months": [],
+                  "end_type": "never",
+                  "count": null,
+                  "until": null,
+                  "evidence": null,
+                  "reason": "用户未要求重复"
+                },
+                "reason": "非全天，用户指定确切开始结束时间",
+                "unsupported": []
+              }
+            }
+          ]
+        },
+        "query": null
+      },
+      "review_status": "passed",
+      "elapsed_seconds": 8.02
+    },
+    {
+      "text": "找明天下午空闲时间并自动安排一小时练琴。",
+      "expected": "unsupported_or_clarify",
+      "passed": true,
+      "response": {
+        "route": {
+          "kind": "clarify",
+          "message": "需要先查询明天下午的空闲时间，才能自动安排练琴。请先进行空闲时间查询，再选择具体时间创建事件。",
+          "supported": [],
+          "unsupported": []
+        },
+        "plan": null,
+        "query": null
+      },
+      "review_status": "passed",
+      "elapsed_seconds": 6.79
+    }
+  ]
+}

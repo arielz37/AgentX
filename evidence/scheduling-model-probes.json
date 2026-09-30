@@ -1,0 +1,490 @@
+[
+  {
+    "stage": "route",
+    "text": "下周找一个空闲时间，帮我安排一小时练琴，不用提醒。",
+    "expected": "calendar_schedule",
+    "actual": "calendar_schedule",
+    "passed": true,
+    "result": {
+      "route": {
+        "kind": "calendar_schedule",
+        "message": "正在为您查找下周的空闲时间以安排练琴，不设置提醒。",
+        "supported": [
+          "calendar"
+        ],
+        "unsupported": []
+      },
+      "plan": null,
+      "query": {
+        "mode": "free_slots",
+        "start_at": "2030-10-07T00:00:00+08:00",
+        "end_at": "2030-10-14T00:00:00+08:00",
+        "time_zone": "Asia/Shanghai",
+        "duration_minutes": 60,
+        "day_start_minute": 540,
+        "day_end_minute": 1320,
+        "assumptions": [
+          "用户未指定具体时间，默认9点至22点时间段内安排",
+          "练琴时长默认一小时",
+          "不设置任何提醒"
+        ]
+      },
+      "schedule_request": {
+        "time_authority": "self_directed",
+        "reason": "用户要求下周安排一小时练琴，并明确不需要提醒",
+        "items": [
+          {
+            "item_id": "i1",
+            "title": "练琴",
+            "evidence": "帮我安排一小时练琴"
+          }
+        ]
+      }
+    },
+    "model": "gpt-4.1-mini-2025-04-14",
+    "elapsed": 11.24
+  },
+  {
+    "stage": "route",
+    "text": "下周有哪些一小时空档？",
+    "passed": false,
+    "error": "Inconsistent review decision",
+    "review": {
+      "decision": "correct",
+      "issues": [
+        {
+          "item_id": null,
+          "field": "day_start_minute",
+          "reason": "用户未指定具体每日开始时间，默认08:00不符合常见工作日的默认08:00至22:00范围，应为480（08:00）与1320（22:00）中的22:00作为结束时刻；当前计划用到的结束时刻1320正确，但计划说明中工作日时间为08:00至22:00，应统一。"
+        },
+        {
+          "item_id": null,
+          "field": "assumptions",
+          "reason": "说明中的默认工作日时间写错了，写成08:00至22:00，但day_end_minute为1320分钟即22:00，应调整说明为默认工作日08:00至22:00。"
+        },
+        {
+          "item_id": null,
+          "field": "end_at",
+          "reason": "end_at时间应为2030-10-14T00:00:00+08:00（即下周日的0点，但原文中next_week_sunday是10-13，应包含10-13全天，应使用10-14日0点作为结束时间。"
+        },
+        {
+          "item_id": null,
+          "field": "range_coverage",
+          "reason": "候选计划中包括了周六和周日（6和7）。用户只问下周，正常可包含周末，时间范围无误。"
+        }
+      ],
+      "corrected_response": {
+        "route": {
+          "kind": "calendar_query",
+          "message": "正在查询您下周（2030-10-07至2030-10-13）的1小时空档。",
+          "supported": [
+            "calendar"
+          ],
+          "unsupported": []
+        },
+        "plan": null,
+        "query": {
+          "mode": "free_slots",
+          "start_at": "2030-10-07T00:00:00+08:00",
+          "end_at": "2030-10-14T00:00:00+08:00",
+          "time_zone": "Asia/Shanghai",
+          "duration_minutes": 60,
+          "day_start_minute": 480,
+          "day_end_minute": 1320,
+          "assumptions": [
+            "未指定具体每日开始和结束时间，默认工作日时间08:00至22:00"
+          ]
+        },
+        "schedule_request": null
+      }
+    }
+  },
+  {
+    "stage": "route",
+    "text": "下周已经预约的牙医时间忘了，你找个空档帮我填上。",
+    "expected": "clarify",
+    "actual": "clarify",
+    "passed": true,
+    "result": {
+      "route": {
+        "kind": "clarify",
+        "message": "您提到的牙医预约时间未知，无法自动安排空档。请提供具体的预约时间或其他详细信息。",
+        "supported": [],
+        "unsupported": []
+      },
+      "plan": null,
+      "query": null,
+      "schedule_request": null
+    },
+    "model": "gpt-4.1-mini-2025-04-14",
+    "elapsed": 6.91
+  },
+  {
+    "stage": "placement",
+    "case": "one_item",
+    "passed": true,
+    "result": {
+      "source_id": "snapshot-1",
+      "decision": "scheduled",
+      "message": "根据您10月2日下午2点到6点的时间范围，已有下午3点至4点的整理书架安排，系统为您选择了2点到3点的空档来安排一小时整理书架，时长恰好满足需求，且您请求无需提醒，故未设置任何提醒。",
+      "plan": {
+        "overflow": false,
+        "items": [
+          {
+            "item_id": "i1",
+            "kind": "flexible",
+            "fields": {
+              "title": {
+                "value": "整理书架",
+                "source": "explicit",
+                "evidence": "10月2日下午两点到六点找空档帮我安排一小时整理书架",
+                "reason": "标题来源用户明确要求",
+                "critical": true,
+                "blocks_creation": false
+              },
+              "start_at": {
+                "value": "2030-10-02T14:00:00+08:00",
+                "source": "defaulted",
+                "evidence": null,
+                "reason": "根据手机日历快照的空档推断用户时间范围内可用空档",
+                "critical": false,
+                "blocks_creation": false
+              },
+              "end_at": {
+                "value": "2030-10-02T15:00:00+08:00",
+                "source": "defaulted",
+                "evidence": null,
+                "reason": "根据起始时间及用户要求一小时时长计算结束时间",
+                "critical": false,
+                "blocks_creation": false
+              },
+              "time_zone": {
+                "value": "Asia/Shanghai",
+                "source": "inferred",
+                "evidence": null,
+                "reason": "使用手机提交时区推断时区",
+                "critical": true,
+                "blocks_creation": false
+              },
+              "location": {
+                "value": null,
+                "source": "unresolved",
+                "evidence": null,
+                "reason": "用户未提供地点信息",
+                "critical": false,
+                "blocks_creation": false
+              }
+            },
+            "alerts": {
+              "mode": "disabled",
+              "evidence": "不用提醒",
+              "reason": "用户明确请求不设置提醒",
+              "count_limit": 0,
+              "no_extra": true,
+              "overflow": false,
+              "items": []
+            },
+            "calendar": {
+              "is_all_day": false,
+              "notes": null,
+              "url": null,
+              "recurrence": {
+                "mode": "none",
+                "frequency": null,
+                "interval": 1,
+                "weekdays": [],
+                "month_days": [],
+                "months": [],
+                "end_type": "never",
+                "count": null,
+                "until": null,
+                "evidence": null,
+                "reason": "用户未要求重复"
+              },
+              "reason": "用户安排的单次整理书架事件",
+              "unsupported": []
+            }
+          }
+        ]
+      }
+    },
+    "model": "gpt-4.1-mini-2025-04-14",
+    "review": "pass",
+    "elapsed": 9.83
+  },
+  {
+    "stage": "placement",
+    "case": "two_items",
+    "passed": true,
+    "result": {
+      "source_id": "snapshot-1",
+      "decision": "scheduled",
+      "message": "根据2030年10月2日下午14点到18点的空档，建议将整理书架安排在14:00至15:00，因已有15:00至16:00的整理书架预约，占用该时间段。练琴安排在16:00至17:00，使用余下空档中较早且连续的时间段，均为建议时间段且时长恰为1小时。所有时段均依据提供的空档，提醒设置依用户要求不启用。",
+      "plan": {
+        "overflow": false,
+        "items": [
+          {
+            "item_id": "i1",
+            "kind": "flexible",
+            "fields": {
+              "title": {
+                "value": "整理书架",
+                "source": "explicit",
+                "evidence": "10月2日下午两点到六点找空档安排整理书架和练琴",
+                "reason": "标题源于用户明确指示",
+                "critical": true,
+                "blocks_creation": false
+              },
+              "start_at": {
+                "value": "2030-10-02T14:00:00+08:00",
+                "source": "defaulted",
+                "evidence": null,
+                "reason": "根据日历快照空档自动安排",
+                "critical": false,
+                "blocks_creation": false
+              },
+              "end_at": {
+                "value": "2030-10-02T15:00:00+08:00",
+                "source": "defaulted",
+                "evidence": null,
+                "reason": "补齐1小时时长",
+                "critical": false,
+                "blocks_creation": false
+              },
+              "time_zone": {
+                "value": "Asia/Shanghai",
+                "source": "inferred",
+                "evidence": null,
+                "reason": "使用手机提交时区",
+                "critical": true,
+                "blocks_creation": false
+              },
+              "location": {
+                "value": null,
+                "source": "unresolved",
+                "evidence": null,
+                "reason": "地点未知",
+                "critical": false,
+                "blocks_creation": false
+              }
+            },
+            "alerts": {
+              "mode": "disabled",
+              "evidence": "不用提醒",
+              "reason": "用户要求不启用提醒",
+              "count_limit": 0,
+              "no_extra": true,
+              "overflow": false,
+              "items": []
+            },
+            "calendar": {
+              "is_all_day": false,
+              "notes": null,
+              "url": null,
+              "recurrence": {
+                "mode": "none",
+                "frequency": null,
+                "interval": 1,
+                "weekdays": [],
+                "month_days": [],
+                "months": [],
+                "end_type": "never",
+                "count": null,
+                "until": null,
+                "evidence": null,
+                "reason": "用户未要求重复"
+              },
+              "reason": "用户单次任务安排",
+              "unsupported": []
+            }
+          },
+          {
+            "item_id": "i2",
+            "kind": "flexible",
+            "fields": {
+              "title": {
+                "value": "练琴",
+                "source": "explicit",
+                "evidence": "10月2日下午两点到六点找空档安排整理书架和练琴",
+                "reason": "标题源于用户明确指示",
+                "critical": true,
+                "blocks_creation": false
+              },
+              "start_at": {
+                "value": "2030-10-02T16:00:00+08:00",
+                "source": "defaulted",
+                "evidence": null,
+                "reason": "根据日历快照空档自动安排",
+                "critical": false,
+                "blocks_creation": false
+              },
+              "end_at": {
+                "value": "2030-10-02T17:00:00+08:00",
+                "source": "defaulted",
+                "evidence": null,
+                "reason": "补齐1小时时长",
+                "critical": false,
+                "blocks_creation": false
+              },
+              "time_zone": {
+                "value": "Asia/Shanghai",
+                "source": "inferred",
+                "evidence": null,
+                "reason": "使用手机提交时区",
+                "critical": true,
+                "blocks_creation": false
+              },
+              "location": {
+                "value": null,
+                "source": "unresolved",
+                "evidence": null,
+                "reason": "地点未知",
+                "critical": false,
+                "blocks_creation": false
+              }
+            },
+            "alerts": {
+              "mode": "disabled",
+              "evidence": "不用提醒",
+              "reason": "用户要求不启用提醒",
+              "count_limit": 0,
+              "no_extra": true,
+              "overflow": false,
+              "items": []
+            },
+            "calendar": {
+              "is_all_day": false,
+              "notes": null,
+              "url": null,
+              "recurrence": {
+                "mode": "none",
+                "frequency": null,
+                "interval": 1,
+                "weekdays": [],
+                "month_days": [],
+                "months": [],
+                "end_type": "never",
+                "count": null,
+                "until": null,
+                "evidence": null,
+                "reason": "用户未要求重复"
+              },
+              "reason": "用户单次任务安排",
+              "unsupported": []
+            }
+          }
+        ]
+      }
+    },
+    "model": "gpt-4.1-mini-2025-04-14",
+    "review": "pass",
+    "elapsed": 13.39
+  },
+  {
+    "stage": "placement",
+    "case": "no_slots",
+    "passed": true,
+    "result": {
+      "source_id": "snapshot-1",
+      "decision": "no_slot",
+      "message": "根据您提供的10月2日下午2点到6点的手机日历快照，该时间段内没有可用的1小时空档，无法为您安排整理书架的时间。",
+      "plan": null
+    },
+    "model": "gpt-4.1-mini-2025-04-14",
+    "review": "pass",
+    "elapsed": 5.13
+  },
+  {
+    "stage": "placement",
+    "case": "untrusted_title",
+    "passed": true,
+    "result": {
+      "source_id": "snapshot-1",
+      "decision": "scheduled",
+      "message": "根据您10月2日下午的空闲时间，建议将整理书架活动安排在14:00至15:00这一小时段完成，该时间段为空闲且满足1小时需求，且您指定不需要提醒。",
+      "plan": {
+        "overflow": false,
+        "items": [
+          {
+            "item_id": "i1",
+            "kind": "flexible",
+            "fields": {
+              "title": {
+                "value": "整理书架",
+                "source": "explicit",
+                "evidence": "10月2日下午两点到六点找空档帮我安排一小时整理书架",
+                "reason": "用户请求的待办事项标题",
+                "critical": false,
+                "blocks_creation": false
+              },
+              "start_at": {
+                "value": "2030-10-02T14:00:00+08:00",
+                "source": "defaulted",
+                "evidence": null,
+                "reason": "依据手机日历提供的空闲时间段选择开始时间",
+                "critical": false,
+                "blocks_creation": false
+              },
+              "end_at": {
+                "value": "2030-10-02T15:00:00+08:00",
+                "source": "defaulted",
+                "evidence": null,
+                "reason": "开始时间加1小时长度计算得到结束时间",
+                "critical": false,
+                "blocks_creation": false
+              },
+              "time_zone": {
+                "value": "Asia/Shanghai",
+                "source": "inferred",
+                "evidence": null,
+                "reason": "使用手机提交时区",
+                "critical": false,
+                "blocks_creation": false
+              },
+              "location": {
+                "value": null,
+                "source": "unresolved",
+                "evidence": null,
+                "reason": "用户未提供整理书架地点信息",
+                "critical": false,
+                "blocks_creation": false
+              }
+            },
+            "alerts": {
+              "mode": "disabled",
+              "evidence": "不用提醒",
+              "reason": "用户明确表示不需要提醒",
+              "count_limit": 0,
+              "no_extra": true,
+              "overflow": false,
+              "items": []
+            },
+            "calendar": {
+              "is_all_day": false,
+              "notes": null,
+              "url": null,
+              "recurrence": {
+                "mode": "none",
+                "frequency": null,
+                "interval": 1,
+                "weekdays": [],
+                "month_days": [],
+                "months": [],
+                "end_type": "never",
+                "count": null,
+                "until": null,
+                "evidence": null,
+                "reason": "用户未要求重复安排"
+              },
+              "reason": "用户未要求全天安排，活动为单次1小时整理书架",
+              "unsupported": []
+            }
+          }
+        ]
+      }
+    },
+    "model": "gpt-4.1-mini-2025-04-14",
+    "review": "pass",
+    "elapsed": 7.23
+  }
+]

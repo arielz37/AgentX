@@ -1,9 +1,0 @@
-.runtime/
-artifacts/
-data/
-.env
-Signing.local.xcconfig
-build/
-__pycache__/
-*.xcuserstate
-xcuserdata/

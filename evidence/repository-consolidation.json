@@ -1,0 +1,36 @@
+{
+  "recorded_at": "2026-09-30T15:42:43.528967+00:00",
+  "project": "AgentX",
+  "layout": "single root Xcode project; no submodule dependency",
+  "validation": {
+    "python_tests_passed": 109,
+    "foundation_programs_passed": 9,
+    "eventkit_test_double_programs_passed": 5,
+    "ios_debug_device_target_unsigned_build": "passed",
+    "clean_public_checkout": {
+      "python_tests_passed": 109,
+      "foundation_programs_passed": 9,
+      "eventkit_test_double_programs_passed": 5,
+      "ios_debug_device_target_unsigned_build": "passed",
+      "private_config_present": false,
+      "submodule_required": false
+    },
+    "launcher_read_only_check": "passed; paired iPhone discovered; no services or tasks started"
+  },
+  "configuration": {
+    "model_variable": "AGENTX_MODEL",
+    "reads_parent_env": false,
+    "personal_configuration_tracked": false
+  },
+  "privacy_review": {
+    "prior_main_commits_scanned": 7,
+    "historical_blobs_scanned": 150,
+    "secret_token_private_key_or_device_identifier_matches": 0,
+    "historical_personal_path_references": "Two documentation paths only; no credentials. Current documentation uses portable paths.",
+    "historical_images": "Settings search and synthetic AgentX UI previews reviewed; no private calendar records.",
+    "staged_file_secret_matches": 0,
+    "exact_local_key_in_current_tree_or_prior_main": "absent"
+  },
+  "calendar_operations_performed": 0,
+  "device_business_retest": "not performed; repository consolidation is not new phone acceptance"
+}

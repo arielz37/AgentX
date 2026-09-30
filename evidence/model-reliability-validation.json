@@ -1,0 +1,27 @@
+{
+  "python_tests": 78,
+  "foundation_validation_programs": 8,
+  "eventkit_test_double_programs": 4,
+  "signed_ios_build": "passed",
+  "live_synthetic_model_cases": 2,
+  "live_synthetic_model_passed": 2,
+  "observed_failure_elapsed_seconds": {
+    "long_schedule": 16.3,
+    "another_parse": 22.27
+  },
+  "old_stage_limits_seconds": {
+    "parse": 22,
+    "schedule": 16
+  },
+  "new_stage_limit_seconds": 120,
+  "request_attempt_limit": 3,
+  "foreground_window_seconds": 300,
+  "background_window_max_seconds": 45,
+  "device_installation": "passed",
+  "device_business_acceptance": "pending_new_long_request",
+  "calendar_side_effects_in_probes": false,
+  "raw_task_records": "local_ignored_only",
+  "device_launch": "passed",
+  "mac_service_restart": "passed",
+  "device_rpc_status": "passed; agentx protocol 5, full_access, iphone_native_app foreground"
+}

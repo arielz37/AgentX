@@ -1,0 +1,22 @@
+[
+  {
+    "case": "planning_case",
+    "passed": false,
+    "error": "Invalid creation inventory item",
+    "elapsed_seconds": 3.787
+  },
+  {
+    "case": "one_saved_three_conflicts_one_unknown",
+    "passed": true,
+    "answer": "这五件事情中，只有“看书”一项已成功保存并且核对无误，安排在2030年10月7日9点到10点。其余四项未能成功保存：整理相册、整理视频和讨论出游这三项因与已有安排时间冲突，未加入日历；看牙医因为没有提供关键时间信息，也没能生成日程。用户提到的关于出游的备注和链接没有保存，因为“讨论出游”这一事项没有被成功添加到日历中。",
+    "review_decision": "pass",
+    "elapsed_seconds": 8.272
+  },
+  {
+    "case": "malformed_review_recovery",
+    "passed": true,
+    "answer": "五件事情中只有“看书”已成功保存并核对。整理相册、整理视频和讨论出游由于与已有安排冲突，未能保存。看牙医因缺少关键时间信息，未创建。同时，关于出游的备注和链接也没有保存。",
+    "review_decision": "correct",
+    "elapsed_seconds": 4.996
+  }
+]

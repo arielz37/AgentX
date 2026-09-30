@@ -31,7 +31,7 @@ import EventKit
         let features = CalendarFeatures(is_all_day:true,notes:"带书",url:"https://example.com",recurrence:none,reason:"全天",unsupported:[])
         try features.validate(text:"全天带书 https://example.com")
         let now = ISO8601DateFormatter().date(from:"2029-01-01T00:00:00Z")!
-        var item: [String:Any] = ["item_id":"i1","title":"Wellphone Test DST", "start_at":"2030-03-09T00:00:00-05:00", "end_at":"2030-03-12T00:00:00-04:00", "time_zone":"America/New_York", "calendar":features.wire]
+        var item: [String:Any] = ["item_id":"i1","title":"AgentX Test DST", "start_at":"2030-03-09T00:00:00-05:00", "end_at":"2030-03-12T00:00:00-04:00", "time_zone":"America/New_York", "calendar":features.wire]
         let validated = try CalendarEventInput(item,now:now,productMode:true)
         precondition(validated.end.timeIntervalSince(validated.start) == 71*3600) // local days, not 72h
         item["end_at"]="2030-03-12T01:00:00-04:00"

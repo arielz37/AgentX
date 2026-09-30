@@ -1,0 +1,21 @@
+{
+  "python_tests": 66,
+  "swift_validation_programs": 8,
+  "eventkit_test_double_programs": 4,
+  "synthetic_live_model_cases": 7,
+  "synthetic_live_model_passed": 7,
+  "signed_ios_build": "passed",
+  "hotfix_device_installation": "passed",
+  "real_device_hotfix_acceptance": "not_run",
+  "actual_incident_findings": [
+    "all-day request incorrectly subject to timed duration limit",
+    "all-day raw return representation rejected by timestamp/timezone equality",
+    "one initial route skipped availability retrieval",
+    "saved-but-unverified items omitted from conversation and pre-existing query events substituted"
+  ],
+  "manual_calendar_edits": "normal supported workflow; user confirmed some test events were manually deleted",
+  "raw_records": "local ignored data/artifacts only",
+  "hotfix_app_launch": "passed",
+  "mac_service_restart": "started",
+  "post_install_rpc_status": "passed; agentx protocol 5, full_access, iphone_native_app foreground"
+}

@@ -1,0 +1,47 @@
+{
+  "recorded_at": "2026-09-30T15:21:45.962128+00:00",
+  "python_tests": {
+    "passed": 107,
+    "log": "local artifacts/answer-recovery-python.log"
+  },
+  "swift_validation": {
+    "foundation_programs": 9,
+    "eventkit_test_double_programs": 5,
+    "passed": true
+  },
+  "ios_signed_build": "passed",
+  "model_probes": {
+    "eight_item_complete_and_partial": "completion-answer-model-probes.json",
+    "mixed_results_and_malformed_review_recovery": "answer-recovery-model-probes.json",
+    "final_inventory_repair": "answer-recovery-inventory-probe.json",
+    "earlier_inventory_failures_preserved": true
+  },
+  "private_record_replay": "user explicitly authorized the current failed task only and tapped answer retry; no history or new calendar execution",
+  "phone_installation": "installed and launched",
+  "calendar_writes_in_this_repair": 0,
+  "limitations": [
+    "Model checks do not prove semantic correctness for all inputs.",
+    "Model/network failures still show an explicit answer-only retry, never fabricated success.",
+    "Answer retries use the original snapshot, not the current calendar."
+  ],
+  "runtime": {
+    "mac_service": "started",
+    "rpc": "connected",
+    "app_state": "foreground",
+    "calendar_authorization": "full_access",
+    "write_window_armed": false
+  },
+  "phone_answer_retry_acceptance": {
+    "source": "phone persisted answer and RPC acknowledgement; user UI display not independently observed",
+    "state": "complete",
+    "delivery": "acknowledged",
+    "elapsed_seconds": 11.973,
+    "execution_state_preserved": "partial",
+    "original_write_attempt_count": 1,
+    "new_write_requests": 0,
+    "previous_answer_failure_archived": 1,
+    "legacy_incorrect_plan_preserved": true
+  },
+  "deployed_at": "2026-09-30T15:25:27.210303+00:00",
+  "accepted_at": "2026-09-30T15:26:40.997807+00:00"
+}

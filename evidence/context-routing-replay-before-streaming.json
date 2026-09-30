@@ -1,0 +1,35 @@
+[
+  {
+    "case": "recorded_wrong_draft",
+    "passed": false,
+    "error": "model_review_blocked; 日历未执行",
+    "elapsed_seconds": 8.559
+  },
+  {
+    "case": "full_actual_context_1",
+    "passed": true,
+    "checks": {
+      "creation_route": true,
+      "all_eight_items": true,
+      "review_passed": true,
+      "specified_dates_times_kept": true,
+      "all_day_and_two_day_span": true,
+      "weekly_four_occurrences": true,
+      "interview_two_reminders": true,
+      "other_six_no_reminders": true,
+      "piano_adaptive_reminder": true,
+      "notes_and_link": true
+    },
+    "elapsed_seconds": 33.368,
+    "initial_route": "calendar",
+    "final_route": "calendar",
+    "review_status": "passed",
+    "review_rounds": 1
+  },
+  {
+    "case": "full_actual_context_2",
+    "passed": false,
+    "error": "model_stage_timeout",
+    "elapsed_seconds": 120.316
+  }
+]

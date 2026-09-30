@@ -1,0 +1,179 @@
+[
+  {
+    "case": "followup_route_old_date",
+    "passed": true,
+    "result": {
+      "route": {
+        "kind": "calendar_mutation",
+        "message": "请先查询相关事件以确定修改目标时间。",
+        "supported": [
+          "calendar"
+        ],
+        "unsupported": []
+      },
+      "plan": null,
+      "query": {
+        "mode": "events",
+        "start_at": "2030-10-02T00:00:00+08:00",
+        "end_at": "2030-10-03T00:00:00+08:00",
+        "time_zone": "Asia/Shanghai",
+        "duration_minutes": 60,
+        "day_start_minute": 0,
+        "day_end_minute": 1440,
+        "assumptions": [
+          "查询已知‘整理书架’事件所在日期以便修改时间"
+        ],
+        "slot_kind": "timed",
+        "duration_days": 1
+      },
+      "schedule_request": null
+    },
+    "model": "gpt-4.1-mini-2025-04-14",
+    "elapsed": 6.04
+  },
+  {
+    "case": "followup_minimal_move",
+    "passed": true,
+    "result": {
+      "source_id": "mutation-1",
+      "decision": "execute",
+      "message": "准备将事件'AgentX Test 整理书架'（2030-10-02）开始时间改为下午4点，保持持续时长1小时，同步调整结束时间。",
+      "actions": [
+        {
+          "item_id": "i1",
+          "target_ref": "candidate-1",
+          "operation": "update",
+          "scope": "this_event",
+          "patch": {
+            "title": null,
+            "start_at": "2030-10-02T16:00:00+08:00",
+            "end_at": "2030-10-02T17:00:00+08:00",
+            "time_zone": null,
+            "is_all_day": null,
+            "location": null,
+            "notes": null,
+            "url": null,
+            "reminder_offsets_seconds": null
+          }
+        }
+      ]
+    },
+    "model": "gpt-4.1-mini-2025-04-14",
+    "elapsed": 5.31
+  },
+  {
+    "case": "delete_actual_target",
+    "passed": true,
+    "result": {
+      "source_id": "mutation-1",
+      "decision": "execute",
+      "message": "准备删除2030年10月2日下午2点至3点的事件“AgentX Test 整理书架”。",
+      "actions": [
+        {
+          "item_id": "i1",
+          "target_ref": "candidate-1",
+          "operation": "delete",
+          "scope": "this_event",
+          "patch": null
+        }
+      ]
+    },
+    "model": "gpt-4.1-mini-2025-04-14",
+    "elapsed": 4.96
+  },
+  {
+    "case": "ambiguous_target_no_write",
+    "passed": true,
+    "result": {
+      "source_id": "mutation-1",
+      "decision": "needs_clarification",
+      "message": "您有两个\"整理书架\"事件，分别在2030年10月2日下午2点和5点。请问您想删除哪一个？",
+      "actions": []
+    },
+    "model": "gpt-4.1-mini-2025-04-14",
+    "elapsed": 5.11
+  },
+  {
+    "case": "one_year_route",
+    "passed": true,
+    "result": {
+      "route": {
+        "kind": "calendar_query",
+        "message": "正在查询2031年全年的日程安排。",
+        "supported": [
+          "calendar"
+        ],
+        "unsupported": []
+      },
+      "plan": null,
+      "query": {
+        "mode": "events",
+        "start_at": "2031-01-01T00:00:00+08:00",
+        "end_at": "2032-01-01T00:00:00+08:00",
+        "time_zone": "Asia/Shanghai",
+        "duration_minutes": 60,
+        "day_start_minute": 0,
+        "day_end_minute": 1440,
+        "assumptions": [
+          "默认查询2031年全年的日程"
+        ],
+        "slot_kind": "timed",
+        "duration_days": 1
+      },
+      "schedule_request": null
+    },
+    "model": "gpt-4.1-mini-2025-04-14",
+    "elapsed": 6.4
+  },
+  {
+    "case": "all_day_route",
+    "passed": true,
+    "result": {
+      "route": {
+        "kind": "calendar_schedule",
+        "message": "已识别为找下周一个完整空闲日整理资料，全天安排，不设提醒。",
+        "supported": [
+          "calendar"
+        ],
+        "unsupported": []
+      },
+      "plan": null,
+      "query": {
+        "mode": "free_slots",
+        "start_at": "2030-10-07T00:00:00+08:00",
+        "end_at": "2030-10-14T00:00:00+08:00",
+        "time_zone": "Asia/Shanghai",
+        "duration_minutes": 144,
+        "day_start_minute": 0,
+        "day_end_minute": 1440,
+        "assumptions": [
+          "用户未指定具体时间，默认按全天考虑",
+          "默认找下周的完整空闲日，满足整理资料全天安排",
+          "未指定提醒则不设提醒"
+        ],
+        "slot_kind": "all_day",
+        "duration_days": 1
+      },
+      "schedule_request": {
+        "time_authority": "self_directed",
+        "reason": "用户请求找下周一个完整空闲日安排整理资料，全天，不用提醒。",
+        "items": [
+          {
+            "item_id": "i1",
+            "title": "整理资料",
+            "evidence": "找一个完整空闲日帮我安排整理资料"
+          }
+        ]
+      }
+    },
+    "model": "gpt-4.1-mini-2025-04-14",
+    "elapsed": 7.23
+  },
+  {
+    "case": "all_day_placement",
+    "passed": false,
+    "error": "Selected times must disclose automatic placement",
+    "review": null,
+    "draft": null
+  }
+]

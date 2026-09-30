@@ -1,0 +1,36 @@
+[
+  {
+    "case": "long_eight_events",
+    "passed": true,
+    "checks": {
+      "direct_creation_route": true,
+      "eight_items": true,
+      "two_all_day_events": true,
+      "four_occurrence_series": true,
+      "review_passed": true
+    },
+    "elapsed_seconds": 36.088,
+    "output_tokens": 3199,
+    "model": "gpt-4.1-mini-2025-04-14",
+    "generation_attempts": 1,
+    "review_attempts": 1
+  },
+  {
+    "case": "long_review_disconnect",
+    "passed": true,
+    "checks": {
+      "direct_creation_route": true,
+      "eight_items": true,
+      "two_all_day_events": true,
+      "four_occurrence_series": true,
+      "review_passed": true,
+      "injected_failure_recovered": true,
+      "draft_generated_once": true
+    },
+    "elapsed_seconds": 29.66,
+    "output_tokens": 3205,
+    "model": "gpt-4.1-mini-2025-04-14",
+    "generation_attempts": 1,
+    "review_attempts": 2
+  }
+]

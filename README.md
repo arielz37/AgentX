@@ -1,50 +1,56 @@
-# Wellphone
+# AgentX
 
-在同一台 iPhone 上输入计划、点执行、切回游戏；Mac 的 GPT 判断合理补齐与重要空缺，iPhone 用 EventKit 创建可执行事项并独立读回，回来查看真实报告。复用 [PhoneAgent](https://github.com/rounak/PhoneAgent) 的 RPC 与设备转发。
-
-**Day 3 已真机验收：真实 GPT 解析后，用户玩王者时 4 项保存并验证；中文输入时混合计划 2 项完成、2 项重要信息不足未创建。连同手动继续场景，本轮新增 10 条，用户确认日历正确、无重复，游戏和输入体验正常。** 后台窗口有限，不能长期后台待命；没有录像/帧率结论。
+**把计划交给助手，继续使用手机。** AgentX 是 SwiftUI 构建的 iPhone 助手工作台：全能助手判断请求范围，日程助手在同一台手机上查询、创建、修改和删除日历事项，并根据真实执行记录给出自然语言答复。当前交付日程模块，邮件、短信等模块尚未实现。
 
 ```mermaid
 flowchart LR
-    I[iPhone 输入 / 点击执行] --> M[Mac worker / GPT 结构化理解]
-    M --> P[不可变计划 / 补齐与空缺来源]
-    P --> E[同台 iPhone EventKit / 保存与读回]
-    E --> R[手机报告 + Mac JSON]
-    G[用户游戏或中文输入] --- E
+  UI["iPhone · 输入与报告"] --> J["持久化任务"]
+  J <-->|"USB 转发 / RPC"| W["Mac · Python worker"]
+  W <-->|"理解、规划、独立复核"| M["GPT"]
+  W <-->|"受限指令 / 真实结果"| E["同一台 iPhone · EventKit"]
+  E --> C["系统日历：执行并读回"]
+  W -->|"依据执行记录生成答复"| UI
 ```
 
-**自适应提醒更新：已实现并通过编译、离线回归和四组真实模型测试；真机前台三项事件与提醒已保存并独立读回；后台与通知触发尚待验收。** 旧任务保持无提醒。[规则与测试](docs/adaptive-alerts.md)。
+## 关键决策：用 EventKit 完成手机侧执行
 
-**日历能力更新：已实现真实重复规则、全天／跨天、备注与链接；离线回归、六组 GPT 解析和签名构建通过，真机验收状态见[能力与验证说明](docs/calendar-capabilities.md)。**
+- **不争抢屏幕和键盘。** 日程操作通过 iPhone 原生 EventKit 接口执行，不需要打开日历 App、模拟点击或输入。用户的前台游戏与助手的数据操作分离；早期 XCTest 实验出现的 Automation Running 水印和变暗促使项目改用原生宿主。
+- **模型判断，接口落实。** 模型理解需求、选择时间、补齐合理缺省并独立复核；代码负责权限、参数、冲突检查、持久化去重和执行。保存成功与读回验证分开记录，模型的“已完成”不能代替真实结果。读回与查询需要日历完全访问权限。
+- **明确运行边界。** 日历保存由这台 iPhone 完成，Mac 承担模型请求和任务协调。原生 App 使用有限后台执行窗口，不是永久后台服务器，也不等于能后台控制任意第三方 App。
 
-已按用户要求回退本轮日期计算与全天边界修复，保留重复／全天／跨天／备注／链接能力。相对日期仍由模型解析，先前日期误解可能再次出现；[诊断记录（已回退）](docs/temporal-root-cause.md)。
+## 能力
 
-新增[写入前模型复核](docs/model-review.md)：首稿经独立复核通过或纠正后才执行；复核失败不放行。两轮共用时间预算，有限合成样本通过，不保证所有语义正确。只需更新 Mac worker。
+自然语言创建与连续对话改删；最长一年范围查询、冲突检查、基于真实空档自动排程；重复规则、全天/跨天、备注与链接、自适应提醒。可查看自动补齐和仍缺失的信息、逐项保存/验证结果。答复失败可单独重新生成，不重做已执行的日历操作。自动择时支持最多 8 个单次事项，暂不支持重复事项自动择时。
 
-## 启动
+## 安装与一键启动
 
-**日常使用：连接并解锁 iPhone，双击项目根目录的 [启动 Wellphone.command](启动%20Wellphone.command)，再手动打开手机 Wellphone。** 自动启动或复用转发器与 worker；使用期间保持服务窗口开启、Mac 不休眠。[详细说明与排错](docs/launcher.md)。
-
-首次部署需要 Xcode、Python 3.10+、已配对真机及 Mac 本地 OpenAI API Key：
+需要 macOS、Xcode、Python 3.10+、iOS 18+ 真机及 OpenAI API Key。
 
 ```bash
-git clone --recurse-submodules https://github.com/arielz37/Wellphone.git
-cd Wellphone
-bash scripts/apply_phoneagent_patch.sh
-open PhoneAgent/PhoneAgent.xcodeproj  # 为 targets 配置自己的 Signing
-python3 scripts/configure_model.py   # 隐藏输入 Key，保存在忽略的 .env
-xcrun xctrace list devices
-python3 scripts/start_native_host.py --udid <实际真机UDID>
-# 另一个终端：
-python3 scripts/wellphone_worker.py
+git clone https://github.com/arielz37/AgentX.git
+cd AgentX
+open AgentX.xcodeproj
+python3 scripts/configure_model.py
 ```
 
-安装启动仅在准备阶段进行，会打开宿主。手机点“准备连接和日历权限”，首次允许完全访问；在测试模式输入计划、点执行；可留在前台等待，也可切回游戏继续执行。无需逐项确认。回来打开执行报告，最后手动核对日历。
+1. 手机连接 Mac，完成信任、Developer Mode 与 Xcode 配对。在本机新建 `Signing.local.xcconfig`，填写 `DEVELOPMENT_TEAM = 你的 Team ID`、`PRODUCT_BUNDLE_IDENTIFIER = com.yourname.AgentX`；在 Xcode 的 **AgentX target → Signing & Capabilities** 检查签名，选择 iPhone 运行。
+2. 上述配置脚本在终端隐藏输入 Key，保存到仅本机的 `.env`。已有配置无需重建。
+3. 日常双击根目录 **`启动 AgentX.command`**，或运行 `python3 scripts/start_agentx.py`。保持终端开启、Mac 不休眠及手机连接；`Control+C` 停止该窗口启动的服务。
+4. 手机 **AgentX → 设置 → 准备连接和日历权限 → 允许完全访问**。选助手、输入、发送；可留在前台，也可切回游戏或聊天，之后查看报告。测试模式默认开启，事件带 `AgentX Test` 前缀。
 
-## 配置与边界
+| 配置 | 说明 |
+|---|---|
+| `OPENAI_API_KEY` | 必需，仅在 Mac 配置 |
+| `AGENTX_MODEL` | 可选，默认 `gpt-4.1-mini` |
+| `HTTPS_PROXY` | 可选，使用本机已有代理 |
+| `AgentXConfig.plist` | RPC 默认端口 `45679`；修改后重建 App、重启服务 |
 
-`.env.example`：`OPENAI_API_KEY`、可选 `WELLPHONE_MODEL`（默认 `gpt-4.1-mini`）和 `HTTPS_PROXY`；密钥仅 Mac。RPC `127.0.0.1:45678`。最多 8 项、未来定时／全天／跨天事件，支持公历重复（每日、每周、每月、每年及结束条件）、备注、原文链接及最多两次提醒；暂不支持邀请、农历、位置提醒、修改或删除已有事项。系统可提前结束 45 秒应用窗口；过期保留计划，需用户主动继续。无 XCTest、音频保活或前台自动化回退。持久化防重不等于严格恰好一次；未知结果禁止自动重建。原始输入、日志、事件 ID 与个人签名仅保留本机。
+进程环境优先于本项目 `.env`，不读取父目录配置。任务相关原文、近期对话摘要及所需日历结果会经 Mac 发送给配置的模型服务；密钥、签名、原始记录与设备日志不入 Git。
 
-[Day 3 实测报告](docs/day3-report.md) · [部署与限制](docs/day3.md) · [Day 2 真实证据](docs/day2.md) · [Day 1 基线](docs/day1.md)
+## 验证与限制
 
-上游固定 `4f0e201572c2cc6f36bab1e1f80c61878b4a90b7`，保留 MIT 归属。源码通过 `patches/phoneagent-calendar-features.patch` 和配置脚本复现，无不可获取的 submodule 提交。验证：`python3 -m unittest discover -s tests -p 'test_*.py'`。
+运行 `bash scripts/test.sh` 可离线执行 Python、Swift 和 EventKit 替身检查。前台单次窗口最长 5 分钟，切到后台后最多 45 秒，系统可提前结束；超时任务需用户主动继续。模型可能误判，未知执行结果不自动重建；去重覆盖同一任务/事项 ID 的重试，不覆盖重新提交相同文本。已有真机验收与本次迁移回归分别记录，不能用编译或模型测试代替后台使用验收。
+
+[架构与扩展](docs/architecture.md) · [功能与验证导航](docs/validation.md) · [整合说明](docs/repository-consolidation.md) · [复用来源](SOURCE_SNAPSHOT.json)
+
+RPC 传输与设备转发代码复用并改编自 [Rounak / PhoneAgent](https://github.com/rounak/PhoneAgent)，保留 [MIT 许可](LICENSE.PhoneAgent)。当前源码独立交付，无旧项目或 Git submodule 依赖。

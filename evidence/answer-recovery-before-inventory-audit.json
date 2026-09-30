@@ -1,0 +1,22 @@
+[
+  {
+    "case": "planning_case",
+    "passed": false,
+    "error": "Wrong activity count survived review",
+    "elapsed_seconds": 21.001
+  },
+  {
+    "case": "one_saved_three_conflicts_one_unknown",
+    "passed": true,
+    "answer": "五件事中，只有“看书”这项已成功保存并经过核实，安排在2030年10月7日上午9点到10点。其余四项均未保存：整理相册、整理视频和讨论出游因时间冲突没有创建，看牙医因缺少关键时间信息未创建。关于出游的备注和链接没有被保存，因为相关事项“讨论出游”未成功添加日历。",
+    "review_decision": "pass",
+    "elapsed_seconds": 6.013
+  },
+  {
+    "case": "malformed_review_recovery",
+    "passed": true,
+    "answer": "五件事中，只有“看书”一项已成功保存并核实，安排在2030年10月7日上午9点到10点。其他四件事（整理相册、整理视频、看牙医、讨论出游）因为时间冲突或缺少时间信息，均未被保存。出游的备注和链接也没有被保存。",
+    "review_decision": "correct",
+    "elapsed_seconds": 5.731
+  }
+]

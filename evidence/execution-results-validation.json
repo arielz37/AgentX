@@ -1,0 +1,42 @@
+{
+  "observed_device_test": {
+    "model_seconds": 35.854,
+    "model_inventory_items": 8,
+    "route": "calendar",
+    "model_requests": "all_completed_first_attempt",
+    "execution_location": "iphone_native_app",
+    "application_state": "foreground",
+    "verified": 4,
+    "saved_unverified": 1,
+    "not_saved": 3,
+    "errors": [
+      "readback_missing",
+      "empty_calendar_list"
+    ]
+  },
+  "changes": [
+    "two_long_lived_stores",
+    "fresh_queries_at_operation_boundaries",
+    "no_false_delete_verification_when_calendar_unavailable",
+    "v8_model_answers_after_calendar_operations"
+  ],
+  "validation": {
+    "python_tests": 96,
+    "foundation_programs": 9,
+    "eventkit_test_double_programs": 5,
+    "signed_build": "passed",
+    "synthetic_model_answer_probes": 2,
+    "actual_device_acceptance": "pending_new_v8_submission"
+  },
+  "deployment": "signed_app_installed_and_mac_services_restarted",
+  "raw_records": "local_ignored_only",
+  "root_cause_limit": "Lifecycle risk confirmed in code; exact OS-side cause unproven without daemon logs.",
+  "connection_verified": {
+    "app_id": "agentx",
+    "protocol_version": 5,
+    "authorization": "full_access",
+    "application_state": "foreground",
+    "import_armed": false,
+    "old_jobs_with_completion_answer": 0
+  }
+}

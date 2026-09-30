@@ -1,0 +1,10 @@
+[
+  {
+    "case": "six_to_five_inventory_repair",
+    "passed": true,
+    "initial_count": 6,
+    "final_count": 5,
+    "review_status": "passed",
+    "elapsed_seconds": 45.517
+  }
+]

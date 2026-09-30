@@ -1,0 +1,44 @@
+# AgentX 验证记录
+
+当前入口：[仓库整合回归](repository-consolidation.md)、[自然语言答复恢复](answer-recovery.md)、[日历改删与上下文](calendar-editing.md)、[自动排程](automatic-scheduling.md)、[查询](calendar-reading.md)。下文保留最初版本验收记录，不代表所有后续功能已在真机通过。
+
+日期：2026-09-29。以下区分模拟/合成验证与真实 iPhone 结果，不沿用旧版的通过结论。
+
+## 已实现
+
+独立工程、签名配置、原生宿主、端口配置、协议身份、worker/锁/数据、双模块统一聊天、能力目录、准备设置页、真实任务报告、范围判断与一次独立复核、来源注明的日历能力快照、独立一键启动。
+
+## 已实测通过
+
+- Xcode 26.2：Debug iPhoneOS 签名构建与 iOS Simulator 构建成功。仅警告未采用 AppIntents 框架，与当前功能无关。
+- AgentX 已安装于真实 iPhone，系统设备清单确认 PhoneAgent 仍在、两个 Bundle Identifier 不同；没有卸载或重装旧 App。
+- 新 App 日历 full_access、execution_location=iphone_native_app；不带 AgentX client 标识的状态请求被手机拒绝。详见 `evidence/device-isolation.json`。
+- 25 项 Python 单元测试通过：受限路由、模型一次复核与失败封锁、非日历计划拒绝、模块身份、Mac 隔离、部分失败/过渡延期/未知发送、不重复发送、低磁盘拦截、中断的准确提示。
+- 5 组 Swift 契约程序通过：事件输入、计划来源/持久化、提醒、重复/全天字段、原生路由/任务恢复。EventKit 测试替身覆盖保存前占位、独立读回、部分成功、跨进程去重、同 ID 内容冲突、事件/提醒/重复字段读回不一致。测试替身不等于真机 EventKit 验证。
+- 6 条真实模型合成输入最终通过：发邮件→unsupported；提醒自己发邮件→calendar；专项助手求职邮件→unsupported；练琴缺省信息→calendar；日程+邮件→mixed；含糊需求→clarify。总计每条两次模型调用，未调用手机。详见 `evidence/model-probes.json`。
+- 模拟器页面检查：首页两个助手顺序、统一对话页、能力目录“即将推出”、设置、深色、中文多行输入、iPhone 16e accessibility-large 大字号及键盘。输入框与键盘没有重叠；大字号下历史区域需滚动。基础无障碍树能识别设置、输入、发送、示例按钮；尚未做完整 VoiceOver 手势走查。
+- 真实日程助手拒绝“帮我写一封求职邮件”，状态 scope_mismatch，没有 plan_execute 发送或 EventKit 结果。
+- 真实日程助手在**前台**创建 10 月 2 日 15:00–16:00 的 `AgentX Test 整理书架`，保存与独立读回均 verified，备注核验正常、提醒数量为 0。Mac 仅一次 plan_execute。手机宿主记录明确为 foreground，不能算作后台实测。
+- 原始输入与完整真实 JSON/Markdown 保留在被忽略的 `data/`。可分享的去标识结果在 `evidence/device-results-redacted.json`，未收录私人日历或设备标识。
+- 本轮前后比较 37 个旧项目文件 SHA-256，全部未变，包括已有未提交代码和签名工程文件。旧启动入口代码未改；本轮未额外重启旧 App 做业务回归。
+
+## 实验中发生的失败及处理
+
+1. 第一轮模型混合意图探针：识别 mixed 却附带 plan，最终参数校验阻断，无日历写入。改为按路由分支约束 JSON Schema，非日历分支只能 plan=null；仍保留两端校验。六项合成复测通过。原始探针记录保留于 `evidence/model-probes-initial.json`。
+2. 真机第一条邮件请求：首轮生成完成，复核阶段出现 `model_timeout_or_network_error`，没有执行发送；用户重新提交后成功识别范围。未采集底层网络原因，不能声称已根治网络偶发错误；没有增加自动重试。
+3. 另一条真机日程请求：Mac 在界面验证期间磁盘耗尽，解析开始但结果未持久化，worker 拒绝继续。原错误标签称 worker_restarted_during_parse，但不能据此断言进程重启；已改成“解析中断或结果未保存”。清理本轮临时编译缓存、改为只运行一台模拟器后恢复空间。增加模型解析前 32 MiB 空闲空间检查；磁盘真正耗尽时报告明确本地存储问题。用户重新提交后前台日程成功。
+
+## 待验证与边界
+
+- 全能助手真机后台执行，以及用户持续玩游戏/中文输入期间的实际体验：等待本轮用户反馈及 RPC 结果。
+- 转到全能助手只保留草稿而不自动发送：代码如此实现，等待用户确认实际操作。
+- AgentX 的复杂重复/跨时区/全天边界与提醒真实通知仍需专项真机验收。未恢复之前已回退的日期编译器/全天边界修复，不能将模型复核当作日期绝对正确的证明。
+- 本轮无完整录像、帧率采样；即使后台保存成功，也不声明零掉帧或已证明全程无干扰。
+- 最多八个事项、两条提醒；不支持修改/删除既有事项、任意 App 操作、邮件或短信发送、跨 App 去重、永久后台运行、脱离 Mac。
+- Release 专项构建/上架、完整无障碍审计、长期断连压力测试尚未进行。
+
+## 复现
+
+在 AgentX 目录执行 `bash scripts/test.sh`；可选 `python3 scripts/check_model.py --live` 使用合成数据访问模型（有费用）。Xcode 打开独立工程，用各自本机 Team 和新的 Bundle ID 构建。
+
+预览截图均使用 Debug `--agentx-preview`，不启动桥、不加载真实记录、不允许提交，不是执行成功证据。原始设备日志、签名配置、模型 Key、任务标识和个人记录不进入 Git。

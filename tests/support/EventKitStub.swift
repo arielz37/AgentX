@@ -4,7 +4,17 @@ public enum EKAuthorizationStatus { case notDetermined, restricted, denied, full
 public enum EKEntityType { case event }
 public enum EKSpan { case thisEvent, futureEvents }
 public enum EKAlarmProximity: Int { case none, enter, leave }
-public final class EKCalendar { public var allowsContentModifications = true; public init() {} }
+public enum EKEventStatus: Int { case none, confirmed, tentative, canceled }
+public enum EKEventAvailability: Int { case notSupported, busy, free, tentative, unavailable }
+public enum EKCalendarType { case local, calDAV, exchange, subscription, birthday }
+public final class EKCalendar {
+    public var title = "Synthetic Calendar"
+    public var allowsContentModifications = true
+    public var calendarIdentifier = UUID().uuidString
+    public var isSubscribed = false
+    public var type = EKCalendarType.local
+    public init() {}
+}
 public final class EKAlarm {
     public var relativeOffset: TimeInterval = 0
     public var absoluteDate: Date?
@@ -14,6 +24,9 @@ public final class EKAlarm {
     public init(absoluteDate: Date) { self.absoluteDate = absoluteDate }
 }
 public final class EKEvent {
+    public var lastModifiedDate: Date?
+    public var status = EKEventStatus.confirmed
+    public var availability = EKEventAvailability.busy
     public var calendar: EKCalendar?
     public var title: String!
     public var location: String?
@@ -30,6 +43,19 @@ public final class EKEvent {
     public init(eventStore: EKEventStore) {}
 }
 public final class EKEventStore {
+    // Fault injection: model expensive per-store connections and a stale cache.
+    public static var instanceLimit: Int?
+    public static var resetCalls = 0
+    public static var cacheReads = false
+    public static var writtenStoreIDs: Set<Int> = []
+    public static var queriedStoreIDs: Set<Int> = []
+    private let instanceID: Int
+    private var cachedEvents: [EKEvent]?
+    public static var rangeQueries = 0
+    public static var calendarList: [EKCalendar] = [EKCalendar()]
+    public static var rangeEvents: [EKEvent]?
+    public static var removes = 0
+    public static var copyReadEvents = false
     public static var saves = 0
     public static var queries = 0
     public static var instances = 0
@@ -39,21 +65,52 @@ public final class EKEventStore {
     public static var beforeSave: (() throws -> Void)?
     public static var failAfterSave = false
     public var defaultCalendarForNewEvents: EKCalendar? = EKCalendar()
-    public init() { Self.instances += 1 }
+    public init() { Self.instances += 1; instanceID = Self.instances }
+    private var available: Bool { Self.instanceLimit.map { instanceID <= $0 } ?? true }
+    public func reset() { Self.resetCalls += 1; cachedEvents = nil }
     public static func authorizationStatus(for type: EKEntityType) -> EKAuthorizationStatus { permission }
     public func requestFullAccessToEvents() async throws -> Bool { true }
     public func save(_ event: EKEvent, span: EKSpan, commit: Bool) throws {
-        try Self.beforeSave?(); Self.saves += 1
-        event.eventIdentifier = UUID().uuidString; Self.events[event.eventIdentifier!] = event
+        try Self.beforeSave?(); Self.saves += 1; Self.writtenStoreIDs.insert(instanceID)
+        event.eventIdentifier = event.eventIdentifier ?? UUID().uuidString; Self.events[event.eventIdentifier!] = event
         if Self.failAfterSave { throw NSError(domain: "test", code: 1) }
     }
-    public func event(withIdentifier id: String) -> EKEvent? {
-        Self.queries += 1
-        guard let e = Self.events[id] else { return nil }
-        if let transform = Self.readTransform { return transform(e) }
-        return e
+    public func remove(_ event: EKEvent, span: EKSpan, commit: Bool) throws {
+        try Self.beforeSave?(); Self.removes += 1
+        if let id = event.eventIdentifier { Self.events.removeValue(forKey: id) }
+        if Self.failAfterSave { throw NSError(domain: "test", code: 2) }
     }
-    public static func reset() { saves=0;queries=0;instances=0;events=[:];readTransform=nil;beforeSave=nil;failAfterSave=false;permission = .fullAccess }
+    private func clone(_ e: EKEvent) -> EKEvent {
+        let c=EKEvent(eventStore:self);c.status=e.status;c.availability=e.availability;c.calendar=e.calendar
+        c.title=e.title;c.location=e.location;c.startDate=e.startDate;c.endDate=e.endDate;c.timeZone=e.timeZone
+        c.isAllDay=e.isAllDay;c.alarms=e.alarms;c.recurrenceRules=e.recurrenceRules;c.url=e.url;c.attendees=e.attendees
+        c.notes=e.notes;c.eventIdentifier=e.eventIdentifier;c.lastModifiedDate=e.lastModifiedDate;return c
+    }
+    public func calendars(for type: EKEntityType) -> [EKCalendar] { available ? Self.calendarList : [] }
+    private func readEvents() -> [EKEvent] {
+        guard available else { return [] }
+        let live = Self.rangeEvents ?? Array(Self.events.values)
+        if !Self.cacheReads { return live }
+        if cachedEvents == nil { cachedEvents = live.map { clone($0) } }
+        return cachedEvents!
+    }
+    public func predicateForEvents(withStart start: Date, end: Date, calendars: [EKCalendar]?) -> NSPredicate {
+        NSPredicate { value, _ in
+            guard let e = value as? EKEvent, let a = e.startDate, let b = e.endDate else { return true }
+            return a == b ? (a >= start && a < end) : (a < end && b > start)
+        }
+    }
+    public func events(matching predicate: NSPredicate) -> [EKEvent] {
+        Self.rangeQueries += 1; Self.queriedStoreIDs.insert(instanceID)
+        return readEvents().filter { predicate.evaluate(with: $0) }.map { Self.copyReadEvents ? clone($0) : $0 }
+    }
+    public func event(withIdentifier id: String) -> EKEvent? {
+        Self.queries += 1; Self.queriedStoreIDs.insert(instanceID)
+        guard let e = readEvents().first(where: { $0.eventIdentifier == id }) else { return nil }
+        if let transform = Self.readTransform { return transform(e) }
+        return Self.copyReadEvents ? clone(e) : e
+    }
+    public static func reset() { instanceLimit=nil;resetCalls=0;cacheReads=false;writtenStoreIDs=[];queriedStoreIDs=[];copyReadEvents=false;removes=0;rangeQueries=0;calendarList=[EKCalendar()];rangeEvents=nil;saves=0;queries=0;instances=0;events=[:];readTransform=nil;beforeSave=nil;failAfterSave=false;permission = .fullAccess }
 }
 
 public enum EKRecurrenceFrequency: Int { case daily, weekly, monthly, yearly }

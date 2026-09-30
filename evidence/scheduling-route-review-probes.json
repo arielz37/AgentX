@@ -1,0 +1,99 @@
+[
+  {
+    "stage": "route",
+    "text": "下周找一个空闲时间，帮我安排一小时练琴，不用提醒。",
+    "expected": "calendar_schedule",
+    "actual": "calendar_schedule",
+    "passed": true,
+    "result": {
+      "route": {
+        "kind": "calendar_schedule",
+        "message": "正在帮您在下周找到一个空闲时间安排一小时练琴，且不设置提醒。",
+        "supported": [
+          "calendar"
+        ],
+        "unsupported": []
+      },
+      "plan": null,
+      "query": {
+        "mode": "free_slots",
+        "start_at": "2030-10-07T00:00:00+08:00",
+        "end_at": "2030-10-14T00:00:00+08:00",
+        "time_zone": "Asia/Shanghai",
+        "duration_minutes": 60,
+        "day_start_minute": 540,
+        "day_end_minute": 1230,
+        "assumptions": [
+          "用户选择了下周作为日期范围",
+          "未指定具体时间，默认上午9点至晚上8点的时间段找空闲"
+        ]
+      },
+      "schedule_request": {
+        "time_authority": "self_directed",
+        "reason": "用户请求下周安排一小时练琴，且不需要提醒",
+        "items": [
+          {
+            "item_id": "i1",
+            "title": "练琴",
+            "evidence": "帮我安排一小时练琴"
+          }
+        ]
+      }
+    },
+    "model": "gpt-4.1-mini-2025-04-14",
+    "elapsed": 6.44
+  },
+  {
+    "stage": "route",
+    "text": "下周有哪些一小时空档？",
+    "expected": "calendar_query",
+    "actual": "calendar_query",
+    "passed": true,
+    "result": {
+      "route": {
+        "kind": "calendar_query",
+        "message": "正在查询下周一到周日的空闲时段，时长为一小时。",
+        "supported": [
+          "calendar"
+        ],
+        "unsupported": []
+      },
+      "plan": null,
+      "query": {
+        "mode": "free_slots",
+        "start_at": "2030-10-07T00:00:00+08:00",
+        "end_at": "2030-10-14T00:00:00+08:00",
+        "time_zone": "Asia/Shanghai",
+        "duration_minutes": 60,
+        "day_start_minute": 540,
+        "day_end_minute": 1260,
+        "assumptions": [
+          "默认每日时间为上午9点至下午9点，涵盖下周全部天数"
+        ]
+      },
+      "schedule_request": null
+    },
+    "model": "gpt-4.1-mini-2025-04-14",
+    "elapsed": 4.3
+  },
+  {
+    "stage": "route",
+    "text": "下周已经预约的牙医时间忘了，你找个空档帮我填上。",
+    "expected": "clarify",
+    "actual": "clarify",
+    "passed": true,
+    "result": {
+      "route": {
+        "kind": "clarify",
+        "message": "您提到的牙医预约时间已知但忘记具体时间，无法自动找空档安排，请提供牙医具体预约时间或更详细信息。",
+        "supported": [],
+        "unsupported": []
+      },
+      "plan": null,
+      "query": null,
+      "schedule_request": null
+    },
+    "model": "gpt-4.1-mini-2025-04-14",
+    "elapsed": 3.98
+  }
+]

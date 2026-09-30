@@ -1,0 +1,44 @@
+{
+  "failure_type": "model_contract_validation_not_transport",
+  "request_elapsed_seconds": 20.945,
+  "model_requests_completed": 2,
+  "draft_route": "calendar_mutation",
+  "review_route": "calendar_schedule",
+  "failure_code": "Scheduling request must cite original text",
+  "root_causes": [
+    "draft route incorrectly restricted reviewer schema, excluding creation",
+    "review cannot correct route after being told to preserve query-only shape",
+    "schedule evidence schema allowed paraphrases rejected by runtime contract",
+    "previous live tests omitted actual conversation history"
+  ],
+  "python_tests": 92,
+  "live_actual_context_replay": "3_of_3_passed",
+  "mac_worker_update": "restarted_with_inventory_streaming_and_full_review_schema",
+  "iphone_update_required": false,
+  "device_business_acceptance": "new_long_task_not_run_after_this_fix",
+  "raw_records": "local_ignored_only",
+  "native_plan_validator_build": "passed",
+  "foundation_validation_programs": 8,
+  "eventkit_test_double_programs": 4,
+  "live_replay_elapsed_seconds": [
+    38.285,
+    43.865,
+    43.966
+  ],
+  "native_plan_replays": "3_of_3_passed_eight_items_each_no_calendar_access",
+  "iphone_runtime": "existing_app_restarted_to_restore_refused_rpc_listener",
+  "connection_verified": {
+    "app_id": "agentx",
+    "protocol_version": 5,
+    "authorization": "full_access",
+    "application_state": "foreground",
+    "import_armed": false
+  },
+  "parse_budget_seconds": 180,
+  "other_model_stage_budget_seconds": 120,
+  "request_budget_seconds": 60,
+  "followup_findings": [
+    "corrected route could silently omit seven items; independent model inventory now constrains count and IDs",
+    "real connection interruption followed by shared 120 second budget exhaustion; SSE reception and 180 second parse budget added"
+  ]
+}

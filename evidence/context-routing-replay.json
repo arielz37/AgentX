@@ -1,0 +1,65 @@
+[
+  {
+    "case": "recorded_wrong_draft",
+    "passed": true,
+    "checks": {
+      "creation_route": true,
+      "all_eight_items": true,
+      "review_passed": true,
+      "specified_dates_times_kept": true,
+      "all_day_and_two_day_span": true,
+      "weekly_four_occurrences": true,
+      "interview_two_reminders": true,
+      "other_six_no_reminders": true,
+      "piano_adaptive_reminder": true,
+      "notes_and_link": true
+    },
+    "elapsed_seconds": 38.285,
+    "initial_route": "calendar_mutation",
+    "final_route": "calendar",
+    "review_status": "corrected",
+    "review_rounds": 1
+  },
+  {
+    "case": "full_actual_context_1",
+    "passed": true,
+    "checks": {
+      "creation_route": true,
+      "all_eight_items": true,
+      "review_passed": true,
+      "specified_dates_times_kept": true,
+      "all_day_and_two_day_span": true,
+      "weekly_four_occurrences": true,
+      "interview_two_reminders": true,
+      "other_six_no_reminders": true,
+      "piano_adaptive_reminder": true,
+      "notes_and_link": true
+    },
+    "elapsed_seconds": 43.865,
+    "initial_route": "calendar",
+    "final_route": "calendar",
+    "review_status": "passed",
+    "review_rounds": 1
+  },
+  {
+    "case": "full_actual_context_2",
+    "passed": true,
+    "checks": {
+      "creation_route": true,
+      "all_eight_items": true,
+      "review_passed": true,
+      "specified_dates_times_kept": true,
+      "all_day_and_two_day_span": true,
+      "weekly_four_occurrences": true,
+      "interview_two_reminders": true,
+      "other_six_no_reminders": true,
+      "piano_adaptive_reminder": true,
+      "notes_and_link": true
+    },
+    "elapsed_seconds": 43.966,
+    "initial_route": "calendar",
+    "final_route": "calendar",
+    "review_status": "passed",
+    "review_rounds": 1
+  }
+]

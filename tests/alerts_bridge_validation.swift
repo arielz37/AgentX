@@ -9,13 +9,13 @@ import EventKit
         let two = AlertRequest(mode: "explicit", evidence: "要求", reason: "测试", count_limit: nil, no_extra: true, overflow: false, items: [spec("a1", -86400), spec("a2", -7200)])
         let start = Date().addingTimeInterval(172800)
         func item(_ alerts: AlertRequest? = two) -> [String: Any] {
-            var i: [String: Any] = ["item_id":"i1", "title":"Wellphone Test mock", "start_at":AlertPolicy.format(start), "end_at":AlertPolicy.format(start.addingTimeInterval(3600)), "time_zone":"Africa/Abidjan"]
+            var i: [String: Any] = ["item_id":"i1", "title":"AgentX Test mock", "start_at":AlertPolicy.format(start), "end_at":AlertPolicy.format(start.addingTimeInterval(3600)), "time_zone":"Africa/Abidjan"]
             if let alerts { i["alerts"] = alerts.wire }; return i
         }
         func setup(_ name: String) async throws -> (CalendarBridge, String, URL) {
             EKEventStore.reset()
             let url=folder.appendingPathComponent(name+".json")
-            let bridge=CalendarBridge(executionLocation: "iphone_native_app", ledgerURL: url)
+            let bridge=CalendarBridge(executionLocation: "iphone_native_app", ledgerURL: url, stores: CalendarEventStores())
             bridge.mayWrite = { true }
             _ = try await bridge.handle("calendar_lock", [:])
             let status=try await bridge.handle("calendar_status", [:])
@@ -118,6 +118,12 @@ import EventKit
         entire["calendar"]=CalendarFeatures(is_all_day:true,notes:"多日活动",url:nil,recurrence:noRule,reason:"三天全天",unsupported:[]).wire
         let allDayResult=try await execute(allDay,ads,entire)
         precondition(allDayResult["status"] as? String == "verified" && (allDayResult["readback"] as! [String:Any])["is_all_day"] as? Bool == true)
+        for (label,offset,passes) in [("native-floating-end", -1.0, true),("wrong-extra-day",86399.0,false),("invalid-end-time",-60.0,false)] {
+            let (bridge,session,_)=try await setup(label)
+            EKEventStore.readTransform={ e in e.timeZone=nil;e.endDate=e.endDate.addingTimeInterval(offset);return e }
+            let result=try await execute(bridge,session,entire)
+            precondition((result["status"] as? String == "verified")==passes)
+        }
         print("PASS calendar capabilities TEST DOUBLE: single series save, all-day span, persisted dedup/conflict, altered recurrence/notes/url/all-day/alarms never falsely verified.")
         print("PASS EventKit TEST DOUBLE: reservation-before-save, fresh readback, partial fulfillment, durable retry/conflict, failures and legacy. No real calendar writes.")
     }
