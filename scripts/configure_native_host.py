@@ -7,15 +7,15 @@ p = root / 'PhoneAgent/PhoneAgent.xcodeproj/project.pbxproj'
 s = p.read_text()
 marker = '/* Wellphone shared calendar sources */'
 # Xcode reformats PBX records and removes standalone comments. Check stable IDs.
-ids = [f'FAD2000000000000000001{i:02X}' for i in range(4)]
+ids = [f'FAD2000000000000000001{i:02X}' for i in range(5)]
 if all(identifier in s for identifier in ids):
     print('Native calendar host source membership already configured.')
     raise SystemExit(0)
 existing = [identifier in s for identifier in ids]
-if any(existing) and existing != [True, True, True, False]:
+if any(existing) and existing not in ([True, True, True, False, False], [True, True, True, True, False]):
     raise SystemExit('Partial shared source membership; review project before proceeding.')
-names = ['CalendarBridge.swift', 'CalendarEventInput.swift', 'SimulatorRPCServer.swift', 'AdaptiveAlerts.swift']
-missing = [i for i in range(4) if ids[i] not in s]
+names = ['CalendarBridge.swift', 'CalendarEventInput.swift', 'SimulatorRPCServer.swift', 'AdaptiveAlerts.swift', 'CalendarFeatures.swift']
+missing = [i for i in range(5) if ids[i] not in s]
 records = ['\n\t\t' + marker]
 for i, name in enumerate(names):
     if ids[i] in s: continue

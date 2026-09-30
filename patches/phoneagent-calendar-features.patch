@@ -1,0 +1,1333 @@
+--- /dev/null
++++ b/PhoneAgentUITests/CalendarFeatures.swift
+@@ -0,0 +1,158 @@
++import Foundation
++
++// Version 3. One native recurrence rule, never a batch of synthetic occurrences.
++struct RecurrenceRequest: Codable {
++    let mode: String
++    let frequency: String?
++    let interval: Int
++    let weekdays: [Int] // ISO Monday=1 ... Sunday=7
++    let month_days: [Int]
++    let months: [Int]
++    let end_type: String
++    let count: Int?
++    let until: String? // inclusive local civil date
++    let evidence: String?
++    let reason: String
++
++    func validate(text: String? = nil) throws {
++        func bad() -> NSError { CalendarFeatures.invalid("重复规则非法或不完整，未降级为单次事件") }
++        guard ["none", "repeat", "unresolved"].contains(mode), (1...99).contains(interval),
++              !reason.isEmpty, reason.count <= 500 else { throw bad() }
++        if let evidence { guard !evidence.isEmpty, text == nil || text!.contains(evidence) else { throw bad() } }
++        if mode != "none" && evidence == nil { throw bad() }
++        for (list, allowed) in [(weekdays, Set(1...7)), (month_days, Set(1...31).union([-1])), (months, Set(1...12))] {
++            guard Set(list).count == list.count, Set(list).isSubset(of: allowed) else { throw bad() }
++        }
++        if mode != "repeat" {
++            guard frequency == nil, interval == 1, weekdays.isEmpty, month_days.isEmpty, months.isEmpty,
++                  end_type == "never", count == nil, until == nil else { throw bad() }
++            return
++        }
++        if ["农历", "阴历", "调休", "法定"].contains(where: { evidence?.contains($0) == true }) {
++            throw CalendarFeatures.invalid("当前只支持公历简单重复，不能将农历或调休降级为公历规则")
++        }
++        switch frequency {
++        case "daily": guard weekdays.isEmpty, month_days.isEmpty, months.isEmpty else { throw bad() }
++        case "weekly": guard !weekdays.isEmpty, month_days.isEmpty, months.isEmpty else { throw bad() }
++        case "monthly": guard weekdays.isEmpty, !month_days.isEmpty, months.isEmpty else { throw bad() }
++        case "yearly": guard weekdays.isEmpty, !month_days.isEmpty, !months.isEmpty, !month_days.contains(-1) else { throw bad() }
++        default: throw bad()
++        }
++        switch end_type {
++        case "never": guard count == nil, until == nil else { throw bad() }
++        case "count": guard let count, (1...1000).contains(count), until == nil else { throw bad() }
++        case "until": guard count == nil, let until, Self.civilDate(until, zone: TimeZone(secondsFromGMT: 0)!) != nil else { throw bad() }
++        default: throw bad()
++        }
++    }
++    static func civilDate(_ text: String, zone: TimeZone) -> Date? {
++        guard text.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil else { return nil }
++        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX")
++        f.calendar = Calendar(identifier: .gregorian); f.timeZone = zone; f.dateFormat = "yyyy-MM-dd"; f.isLenient = false
++        guard let date = f.date(from: text), f.string(from: date) == text else { return nil }
++        return date
++    }
++    func untilDate(zone: TimeZone) -> Date? {
++        guard let until, let day = Self.civilDate(until, zone: zone) else { return nil }
++        var cal = Calendar(identifier: .gregorian); cal.timeZone = zone
++        return cal.date(byAdding: .day, value: 1, to: day)?.addingTimeInterval(-1)
++    }
++    func validateAnchor(start: Date, zone: TimeZone) throws {
++        if mode != "repeat" { return }
++        var cal = Calendar(identifier: .gregorian); cal.timeZone = zone
++        let day = cal.component(.day, from: start)
++        let matchesDay = month_days.contains(day) || (month_days.contains(-1) && day == cal.range(of: .day, in: .month, for: start)!.count)
++        let weekday = (cal.component(.weekday, from: start) + 5) % 7 + 1
++        guard (frequency != "weekly" || weekdays.contains(weekday)),
++              (frequency != "monthly" && frequency != "yearly" || matchesDay),
++              (frequency != "yearly" || months.contains(cal.component(.month, from: start))),
++              (end_type != "until" || (untilDate(zone: zone).map { $0 >= start } ?? false)) else {
++            throw CalendarFeatures.invalid("首次日期不符合重复规则，或重复结束日期早于首次；未创建")
++        }
++    }
++    var summary: String {
++        guard mode == "repeat" else { return mode == "none" ? "不重复" : "重复要求未解决：\(reason)" }
++        let unit = ["daily":"天", "weekly":"周", "monthly":"月", "yearly":"年"][frequency ?? ""] ?? ""
++        let names = [1:"一",2:"二",3:"三",4:"四",5:"五",6:"六",7:"日"]
++        var label = "每\(interval == 1 ? "" : String(interval))\(unit)"
++        if !weekdays.isEmpty { label += " · " + weekdays.sorted().map { "周" + names[$0]! }.joined(separator: "、") }
++        if !months.isEmpty { label += " · " + months.sorted().map { "\($0)月" }.joined(separator: "、") }
++        if !month_days.isEmpty { label += " · " + month_days.sorted().map { $0 == -1 ? "月末" : "\($0)日" }.joined(separator: "、") }
++        label += end_type == "count" ? " · 共\(count ?? 0)次（含首次）" : end_type == "until" ? " · 截至\(until ?? "")（含当天）" : " · 不设结束日期"
++        return label
++    }
++}
++
++struct CalendarFeatures: Codable {
++    let is_all_day: Bool
++    let notes: String?
++    let url: String?
++    let recurrence: RecurrenceRequest
++    let reason: String
++    let unsupported: [String]
++    var blocked: Bool { recurrence.mode == "unresolved" || !unsupported.isEmpty }
++    static func invalid(_ message: String) -> NSError { NSError(domain: "Wellphone.CalendarFeatures", code: 1, userInfo: [NSLocalizedDescriptionKey: message]) }
++    func validate(text: String? = nil) throws {
++        try recurrence.validate(text: text)
++        guard !reason.isEmpty, reason.count <= 500, unsupported.count <= 8,
++              unsupported.allSatisfy({ !$0.isEmpty && $0.count <= 300 }),
++              notes == nil || (!notes!.isEmpty && notes!.count <= 2000) else { throw Self.invalid("日历扩展字段非法") }
++        if let url {
++            guard url.count <= 2000, !url.contains(where: { $0.isWhitespace }),
++                  let parsed = URLComponents(string: url), ["http", "https"].contains(parsed.scheme ?? ""),
++                  !(parsed.host ?? "").isEmpty, parsed.user == nil, parsed.password == nil,
++                  text == nil || text!.contains(url) else { throw Self.invalid("链接必须是原文提供的完整 http/https URL") }
++        }
++    }
++    var wire: [String: Any] { (try? JSONSerialization.jsonObject(with: JSONEncoder().encode(self))) as? [String: Any] ?? [:] }
++}
++
++#if canImport(EventKit)
++import EventKit
++extension RecurrenceRequest {
++    func eventKitRule(zone: TimeZone) -> EKRecurrenceRule? {
++        guard mode == "repeat" else { return nil }
++        let frequencies: [String: EKRecurrenceFrequency] = ["daily": .daily, "weekly": .weekly, "monthly": .monthly, "yearly": .yearly]
++        let days = weekdays.sorted().map { EKRecurrenceDayOfWeek(EKWeekday(rawValue: $0 % 7 + 1)!) }
++        let end: EKRecurrenceEnd? = end_type == "count" ? EKRecurrenceEnd(occurrenceCount: count!) : (end_type == "until" ? EKRecurrenceEnd(end: untilDate(zone: zone)!) : nil)
++        return EKRecurrenceRule(recurrenceWith: frequencies[frequency!]!, interval: interval,
++            daysOfTheWeek: days.isEmpty ? nil : days, daysOfTheMonth: month_days.isEmpty ? nil : month_days.sorted().map { NSNumber(value: $0) },
++            monthsOfTheYear: months.isEmpty ? nil : months.sorted().map { NSNumber(value: $0) },
++            weeksOfTheYear: nil, daysOfTheYear: nil, setPositions: nil, end: end)
++    }
++    static func snapshot(_ rules: [EKRecurrenceRule]?) -> [[String: Any]] {
++        let frequencies: [EKRecurrenceFrequency: String] = [.daily: "daily", .weekly: "weekly", .monthly: "monthly", .yearly: "yearly"]
++        return (rules ?? []).map { r -> [String: Any] in
++            var row: [String: Any] = ["frequency": frequencies[r.frequency] ?? "unknown", "interval": r.interval]
++            row["weekdays"] = (r.daysOfTheWeek ?? []).map { ["day": ($0.dayOfTheWeek.rawValue + 5) % 7 + 1, "week_number": $0.weekNumber] }
++            row["month_days"] = (r.daysOfTheMonth ?? []).map(\.intValue)
++            row["months"] = (r.monthsOfTheYear ?? []).map(\.intValue)
++            row["weeks_of_year"] = (r.weeksOfTheYear ?? []).map(\.intValue)
++            row["days_of_year"] = (r.daysOfTheYear ?? []).map(\.intValue)
++            row["set_positions"] = (r.setPositions ?? []).map(\.intValue)
++            row["first_day_of_week"] = r.firstDayOfTheWeek
++            row["end_count"] = r.recurrenceEnd?.occurrenceCount as Any? ?? NSNull()
++            row["end_at"] = r.recurrenceEnd?.endDate.map(AlertPolicy.format) as Any? ?? NSNull()
++            return row
++        }
++    }
++
++    func matches(_ rules: [EKRecurrenceRule]?, zone: TimeZone) -> Bool {
++        guard mode == "repeat" else { return (rules ?? []).isEmpty }
++        guard let rules, rules.count == 1, let expected = eventKitRule(zone: zone) else { return false }
++        let actual = rules[0]
++        guard actual.frequency == expected.frequency, actual.interval == interval,
++              (actual.daysOfTheWeek ?? []).allSatisfy({ $0.weekNumber == 0 }),
++              (actual.daysOfTheWeek ?? []).map({ ($0.dayOfTheWeek.rawValue + 5) % 7 + 1 }).sorted() == weekdays.sorted(),
++              (actual.daysOfTheMonth ?? []).map(\.intValue).sorted() == month_days.sorted(),
++              (actual.monthsOfTheYear ?? []).map(\.intValue).sorted() == months.sorted(),
++              (actual.weeksOfTheYear ?? []).isEmpty, (actual.daysOfTheYear ?? []).isEmpty, (actual.setPositions ?? []).isEmpty,
++              actual.firstDayOfTheWeek == expected.firstDayOfTheWeek else { return false }
++        switch end_type {
++        case "count": return actual.recurrenceEnd?.occurrenceCount == count && actual.recurrenceEnd?.endDate == nil
++        case "until": return actual.recurrenceEnd?.occurrenceCount == 0 && actual.recurrenceEnd?.endDate.map { abs($0.timeIntervalSince(untilDate(zone: zone)!)) < 1 } == true
++        default: return actual.recurrenceEnd == nil
++        }
++    }
++}
++#endif
+--- /dev/null
++++ b/PhoneAgentUITests/AdaptiveAlerts.swift
+@@ -0,0 +1,190 @@
++import Foundation
++
++// Pure Foundation contract/policy: shared by the host, EventKit adapter and tests.
++struct AlertSpec: Codable {
++    let alert_id: String
++    let trigger_type: String
++    let offset_seconds: Int?
++    let at: String?
++    let source: String
++    let evidence: String?
++    let reason: String
++}
++
++struct AlertRequest: Codable {
++    let mode: String // explicit, disabled, suggested, unresolved
++    let evidence: String?
++    let reason: String
++    let count_limit: Int?
++    let no_extra: Bool
++    let overflow: Bool // more than the 16-entry representation cap; never truncate and execute
++    let items: [AlertSpec]
++
++    func validate(text: String? = nil) throws {
++        func bad() -> NSError { NSError(domain: "Wellphone.Alerts", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid reminder contract or provenance"]) }
++        func quote(_ value: String?) -> Bool {
++            guard let value else { return true }
++            return !value.isEmpty && (text == nil || text!.contains(value))
++        }
++        guard ["explicit", "disabled", "suggested", "unresolved"].contains(mode),
++              !reason.isEmpty, reason.count <= 500, quote(evidence),
++              items.count <= 16, count_limit == nil || (0...10000).contains(count_limit!),
++              !overflow || items.isEmpty else { throw bad() }
++        if ["explicit", "disabled"].contains(mode) && (evidence == nil || !no_extra) { throw bad() }
++        if ["disabled", "unresolved"].contains(mode) && (!items.isEmpty || overflow) { throw bad() }
++        if mode == "disabled" && count_limit != 0 { throw bad() }
++        if mode == "explicit" && items.isEmpty && !overflow { throw bad() }
++        var ids = Set<String>()
++        for item in items {
++            guard item.alert_id.range(of: "^a([1-9]|1[0-6])$", options: .regularExpression) != nil,
++                  ids.insert(item.alert_id).inserted, ["relative", "absolute"].contains(item.trigger_type),
++                  item.source == (mode == "explicit" ? "explicit" : "defaulted"),
++                  !item.reason.isEmpty, item.reason.count <= 500, quote(item.evidence),
++                  item.source != "explicit" || item.evidence != nil else { throw bad() }
++            // Invalid offsets/times are evaluated per reminder, not as event failures.
++        }
++    }
++    var wire: [String: Any] { (try? JSONSerialization.jsonObject(with: JSONEncoder().encode(self))) as? [String: Any] ?? [:] }
++}
++
++struct ResolvedAlert {
++    let id: String
++    let type: String
++    let offset: Int?
++    let fire: Date
++    var wire: [String: Any] {
++        ["alert_id": id, "trigger_type": type, "offset_seconds": offset as Any? ?? NSNull(),
++         "trigger_at": AlertPolicy.format(fire)]
++    }
++}
++
++struct AlertEvaluation {
++    let request: AlertRequest?
++    let configured: [ResolvedAlert]
++    let decisions: [[String: Any]]
++    let complete: Bool
++    let reason: String?
++    var wire: [String: Any] {
++        ["contract_version": 2, "requested": request?.wire as Any? ?? NSNull(),
++         "mode": request?.mode ?? "legacy_none", "configured": configured.map(\.wire),
++         "decisions": decisions, "policy_complete": complete, "policy_reason": reason as Any? ?? NSNull(),
++         "policy_message": reason.map(AlertPolicy.message) as Any? ?? NSNull(),
++         "user_requirement_status": request?.mode == "suggested" || request == nil ? "not_specified" : (complete ? "pending_verification" : "unmet"),
++         "verification_status": "not_attempted", "notification_delivery": "not_observed",
++         "minimum_lead_seconds": AlertPolicy.minimumLeadSeconds]
++    }
++}
++
++enum AlertPolicy {
++    static let minimumLeadSeconds: TimeInterval = 300
++    static let maximumCount = 2
++    static func message(_ code: String) -> String {
++        ["unresolved_instruction": "提醒要求不明确或互相矛盾，未设置",
++         "unsupported_count_no_subset": "去重后的提醒超过两次或用户次数限制，未擅自选择子集",
++         "invalid_time_or_after_start": "提醒时间、时区或提前量无效，或晚于事件开始",
++         "past_reminder": "提醒时间已过去，未改成即时提醒",
++         "absolute_alarm_on_series": "重复系列暂不支持单个绝对日期提醒，未改成每次重复提醒",
++         "minimum_lead_not_met": "距离当前不足五分钟，未设置，以免执行时打扰用户"][code] ?? code
++    }
++    static let tolerance: TimeInterval = 1 // strictly less than one second
++
++    static func format(_ date: Date) -> String { ISO8601DateFormatter().string(from: date) }
++    static func absolute(_ text: String, zone: TimeZone) -> Date? {
++        guard text.range(of: #"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$"#, options: .regularExpression) != nil,
++              let date = ISO8601DateFormatter().date(from: text) else { return nil }
++        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX")
++        f.calendar = Calendar(identifier: .gregorian); f.timeZone = zone
++        f.dateFormat = "yyyy-MM-dd'T'HH:mm:ssXXXXX"
++        return f.string(from: date) == text ? date : nil
++    }
++    static func evaluate(_ request: AlertRequest?, start: Date, zone: TimeZone, now: Date, recurring: Bool = false) -> AlertEvaluation {
++        guard let request else { return AlertEvaluation(request: nil, configured: [], decisions: [], complete: true, reason: nil) }
++        var decisions: [[String: Any]] = [], unique: [ResolvedAlert] = []
++        var complete = true
++        func result(_ configured: [ResolvedAlert], _ ok: Bool, _ reason: String? = nil) -> AlertEvaluation {
++            AlertEvaluation(request: request, configured: configured, decisions: decisions.map { row in
++                var row = row
++                if let code = row["code"] as? String { row["message"] = message(code) }
++                return row
++            }, complete: ok, reason: reason)
++        }
++        if request.mode == "unresolved" { return result([], false, "unresolved_instruction") }
++        if request.mode == "disabled" { return result([], true) }
++        if request.overflow { return result([], false, "unsupported_count_no_subset") }
++        for a in request.items.sorted(by: { $0.alert_id < $1.alert_id }) {
++            var row: [String: Any] = ["alert_id": a.alert_id, "source": a.source, "reason": a.reason]
++            if recurring && a.trigger_type == "absolute" {
++                row["status"] = "not_configured"; row["code"] = "absolute_alarm_on_series"
++                decisions.append(row); complete = false; continue
++            }
++            let fire: Date?
++            if a.trigger_type == "relative", let seconds = a.offset_seconds, a.at == nil, seconds <= 0, seconds >= -315360000 {
++                fire = start.addingTimeInterval(Double(seconds))
++            } else if a.trigger_type == "absolute", a.offset_seconds == nil, let at = a.at {
++                fire = absolute(at, zone: zone)
++            } else { fire = nil }
++            guard let fire, fire <= start else {
++                row["status"] = "not_configured"; row["code"] = "invalid_time_or_after_start"
++                decisions.append(row); complete = false; continue
++            }
++            row["trigger_at"] = format(fire)
++            if let prior = unique.first(where: { abs($0.fire.timeIntervalSince(fire)) < tolerance }) {
++                row["status"] = "deduplicated"; row["duplicate_of"] = prior.id
++                decisions.append(row); continue
++            }
++            unique.append(ResolvedAlert(id: a.alert_id, type: a.trigger_type, offset: a.offset_seconds, fire: fire))
++            row["status"] = "candidate"; decisions.append(row)
++        }
++        // Count the distinct requested times BEFORE removing past/too-near times:
++        // an over-limit explicit request must never silently become a chosen subset.
++        let limit = min(maximumCount, request.count_limit ?? maximumCount)
++        if unique.count > limit {
++            for i in decisions.indices where decisions[i]["status"] as? String == "candidate" {
++                decisions[i]["status"] = "not_configured"; decisions[i]["code"] = "unsupported_count_no_subset"
++            }
++            return result([], false, "unsupported_count_no_subset")
++        }
++        var configured: [ResolvedAlert] = []
++        for a in unique {
++            let i = decisions.firstIndex { $0["alert_id"] as? String == a.id }!
++            if a.fire.timeIntervalSince(now) < minimumLeadSeconds {
++                complete = false; decisions[i]["status"] = "not_configured"
++                decisions[i]["code"] = a.fire <= now ? "past_reminder" : "minimum_lead_not_met"
++            } else { configured.append(a); decisions[i]["status"] = "configured" }
++        }
++        return result(configured.sorted { $0.fire < $1.fire }, complete)
++    }
++    // Compare instants, not array order or relative-vs-absolute representation.
++    // All raw readback types/offsets are separately retained by the EventKit adapter.
++    static func matches(_ expected: [Date], _ actual: [Date], unsupported: Bool = false) -> Bool {
++        guard !unsupported, expected.count == actual.count else { return false }
++        return zip(expected.sorted(), actual.sorted()).allSatisfy { abs($0.timeIntervalSince($1)) < tolerance }
++    }
++    static func object(_ data: Data) throws -> [String: Any] {
++        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
++            throw NSError(domain: "Wellphone.Alerts", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid persisted request object"])
++        }
++        return object
++    }
++    static func canonicalPayload(_ object: [String: Any]) throws -> Data {
++        var copy = object
++        if var alerts = copy["alerts"] as? [String: Any], let rows = alerts["items"] as? [[String: Any]] {
++            alerts["items"] = rows.sorted { ($0["alert_id"] as? String ?? "") < ($1["alert_id"] as? String ?? "") }
++            copy["alerts"] = alerts
++        }
++        if var calendar = copy["calendar"] as? [String: Any], var recurrence = calendar["recurrence"] as? [String: Any] {
++            for key in ["weekdays", "month_days", "months"] {
++                if let values = recurrence[key] as? [Int] { recurrence[key] = values.sorted() }
++            }
++            calendar["recurrence"] = recurrence; copy["calendar"] = calendar
++        }
++        return try JSONSerialization.data(withJSONObject: copy, options: [.sortedKeys])
++    }
++    static func canonicalPlan(_ object: [String: Any]) throws -> Data {
++        var copy = object
++        if let items = copy["items"] as? [[String: Any]] {
++            copy["items"] = try items.map { try JSONSerialization.jsonObject(with: canonicalPayload($0)) }
++        }
++        return try JSONSerialization.data(withJSONObject: copy, options: [.sortedKeys])
++    }
++}
+--- /dev/null
++++ b/PhoneAgent/PlanModels.swift
+@@ -0,0 +1,146 @@
++import Foundation
++
++struct PlanField: Codable {
++    let value: String?
++    let source: String
++    let evidence: String?
++    let reason: String
++    let critical: Bool
++    let blocks_creation: Bool
++}
++struct PlanItem: Codable, Identifiable {
++    let item_id: String
++    let kind: String
++    let fields: [String: PlanField]
++    var alerts: AlertRequest? = nil // absent in historical v1 plans: never infer new reminders
++    var calendar: CalendarFeatures? = nil // v3 only; historical plans keep their original semantics
++    var id: String { item_id }
++    var blocked: Bool { fields.values.contains { $0.blocks_creation } || calendar?.blocked == true }
++    // Policy guardrails bound model defaults, without replacing its semantic judgment.
++    func policyIssue(in batch: [PlanItem]) -> String? {
++        guard !blocked else { return nil }
++        let formatter = ISO8601DateFormatter()
++        guard let startText = fields["start_at"]?.value, let endText = fields["end_at"]?.value,
++              let start = formatter.date(from: startText), let end = formatter.date(from: endText) else { return nil }
++        // Reject duplicate series produced by expanding one multi-weekday instruction.
++        // This is a guard, not a second natural-language parser or silent plan rewrite.
++        if let c = calendar, c.recurrence.mode == "repeat", c.recurrence.frequency == "weekly" {
++            var local = Calendar(identifier: .gregorian)
++            if let name = fields["time_zone"]?.value, let zone = TimeZone(identifier: name) { local.timeZone = zone }
++            for other in batch where other.id < id && !other.blocked {
++                guard let o = other.calendar, o.recurrence.mode == "repeat",
++                      c.recurrence.frequency == o.recurrence.frequency, c.recurrence.interval == o.recurrence.interval,
++                      c.recurrence.weekdays.sorted() == o.recurrence.weekdays.sorted(),
++                      c.recurrence.evidence == o.recurrence.evidence,
++                      fields["title"]?.value == other.fields["title"]?.value,
++                      fields["time_zone"]?.value == other.fields["time_zone"]?.value,
++                      let otherText = other.fields["start_at"]?.value, let otherStart = formatter.date(from: otherText),
++                      local.dateComponents([.hour,.minute,.second], from: start) == local.dateComponents([.hour,.minute,.second], from: otherStart),
++                      abs(start.timeIntervalSince(otherStart)) < Double(c.recurrence.interval * 7) * 86400 else { continue }
++                return "同一原文被拆成重叠重复系列，当前项未创建；请核对已生成系列"
++            }
++        }
++        let defaulted = fields["start_at"]?.source == "defaulted" || fields["end_at"]?.source == "defaulted"
++        guard defaulted else { return nil }
++        if calendar?.is_all_day != true && end.timeIntervalSince(start) > 10800 { return "自主补齐的时长超过 3 小时上限，未创建" }
++        for other in batch where other.id != id && !other.blocked {
++            guard let otherStartText = other.fields["start_at"]?.value, let otherEndText = other.fields["end_at"]?.value,
++                  let otherStart = formatter.date(from: otherStartText), let otherEnd = formatter.date(from: otherEndText) else { continue }
++            let otherDefaulted = other.fields["start_at"]?.source == "defaulted" || other.fields["end_at"]?.source == "defaulted"
++            if start < otherEnd && otherStart < end && (!otherDefaulted || other.id < id) {
++                return "自主补齐的时段与本批 \(other.id) 冲突，未创建；未查询私人日历"
++            }
++        }
++        return nil
++    }
++    func event(testMode: Bool) -> [String: Any] {
++        var event: [String: Any] = ["item_id": item_id]
++        for (key, field) in fields { if let value = field.value { event[key] = value } }
++        if testMode, let title = event["title"] as? String { event["title"] = "Wellphone Test " + title }
++        if let alerts { event["alerts"] = alerts.wire }
++        if let calendar { event["calendar"] = calendar.wire }
++        return event
++    }
++}
++struct CalendarPlan: Codable {
++    let overflow: Bool
++    let items: [PlanItem]
++    func validate(text: String) throws {
++        func reject(_ reason: String) -> NSError { NSError(domain: "Wellphone.Plan", code: 1, userInfo: [NSLocalizedDescriptionKey: reason]) }
++        guard items.count <= 8, !overflow || items.isEmpty else { throw reject("超过 8 项，整个计划未执行") }
++        var ids = Set<String>()
++        for item in items {
++            try item.alerts?.validate(text: text)
++            try item.calendar?.validate(text: text)
++            guard item.item_id.range(of: "^i[1-8]$", options: .regularExpression) != nil,
++                  ids.insert(item.item_id).inserted,
++                  ["flexible", "appointment", "deadline", "other"].contains(item.kind),
++                  Set(item.fields.keys) == Set(["title", "start_at", "end_at", "time_zone", "location"]) else { throw reject("候选字段或标识非法") }
++            for (name, field) in item.fields {
++                guard ["explicit", "inferred", "defaulted", "unresolved"].contains(field.source),
++                      (field.value == nil) == (field.source == "unresolved"),
++                      !field.reason.isEmpty, field.reason.count <= 500,
++                      !(field.critical && field.source == "defaulted"),
++                      !field.blocks_creation || field.value == nil else { throw reject("字段来源或重要事实补齐违规") }
++                if let value = field.value { guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, value.count <= 300 else { throw reject("字段值非法") } }
++                if let evidence = field.evidence { guard !evidence.isEmpty, text.contains(evidence) else { throw reject("引用不在原文中") } }
++                if field.source == "explicit" && field.evidence == nil { throw reject("明确字段缺少原文依据") }
++                if name != "location", field.value == nil, !field.blocks_creation { throw reject("必填空缺必须阻止创建") }
++            }
++        }
++    }
++}
++
++// One atomic document includes original input, immutable plan, and actual execution results.
++struct PlanJob: Codable, Identifiable {
++    let submission_id: String
++    let task_id: String
++    let version: Int
++    let text: String
++    let submitted_at: String
++    let time_zone: String
++    let test_mode: Bool
++    var state: String
++    var message: String
++    var plan: CalendarPlan?
++    var planData: Data?
++    var resultData: Data?
++    var lease_id: String
++    var id: String { submission_id }
++    var request: [String: Any] {
++        ["submission_id": submission_id, "task_id": task_id, "version": version, "text": text,
++         "submitted_at": submitted_at, "time_zone": time_zone, "test_mode": test_mode, "lease_id": lease_id]
++    }
++    var wire: [String: Any] {
++        var row = request
++        row["state"] = state; row["message"] = message
++        if let planData { row["plan"] = try? JSONSerialization.jsonObject(with: planData) }
++        if let resultData { row["execution"] = try? JSONSerialization.jsonObject(with: resultData) }
++        return row
++    }
++}
++final class PlanStore {
++    let directory: URL
++    var url: URL { directory.appendingPathComponent("jobs.json") }
++    init(directory: URL) { self.directory = directory }
++    func load() throws -> [PlanJob] {
++        guard FileManager.default.fileExists(atPath: url.path) else { return [] }
++        return try JSONDecoder().decode([PlanJob].self, from: Data(contentsOf: url))
++    }
++    func save(_ jobs: [PlanJob]) throws {
++        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
++        try JSONEncoder().encode(jobs).write(to: url, options: .atomic)
++    }
++}
++
++// The existing 45-second submission lease applies in both modes. Only background
++// execution needs an OS assertion and remaining OS budget; inactive transitions defer.
++enum CalendarExecutionPolicy {
++    static func allows(foreground: Bool, background: Bool, sessionActive: Bool,
++                       storageHealthy: Bool, windowRemaining: TimeInterval,
++                       hasBackgroundAssertion: Bool, backgroundRemaining: TimeInterval) -> Bool {
++        guard sessionActive, storageHealthy, windowRemaining > 5 else { return false }
++        if foreground { return true }
++        return background && hasBackgroundAssertion && backgroundRemaining > 5
++    }
++}
+--- a/.agents/skills/phoneagent/scripts/forward_rpc_localhost.py
++++ b/.agents/skills/phoneagent/scripts/forward_rpc_localhost.py
+@@ -25,6 +25,8 @@
+ 
+ 
+ RPC_PORT = 45678
++_SUCCESSFUL_HOSTS = {}
++_HOST_LOCK = threading.Lock()
+ 
+ 
+ def eprint(*args: object) -> None:
+@@ -98,10 +100,28 @@
+ 
+ 
+ def connect_remote(udid: str, device_port: int, timeout: float) -> Tuple[Optional[socket.socket], str]:
++    # Reuse an observed successful route; rediscover only after a failure.
++    # Avoid invoking devicectl on every short RPC connection.
++    with _HOST_LOCK:
++        cached = _SUCCESSFUL_HOSTS.get((udid, device_port))
++    if cached:
++        s = _try_connect(cached, device_port, timeout)
++        if s is not None:
++            return s, f"coredevice({cached})"
++        with _HOST_LOCK:
++            _SUCCESSFUL_HOSTS.pop((udid, device_port), None)
+     # 1) Prefer CoreDevice tunnel if available.
+     for host in _coredevice_candidates(udid):
+         s = _try_connect(host, device_port, timeout)
+         if s is not None:
++            with _HOST_LOCK:
++                # Cache the observed numeric peer, not its DNS name: CoreDevice
++                # hostname resolution can itself take ~5 seconds on every call.
++                peer = s.getpeername()
++                address = peer[0]
++                if len(peer) == 4 and peer[3] and "%" not in address:
++                    address += f"%{peer[3]}"
++                _SUCCESSFUL_HOSTS[(udid, device_port)] = address
+             return s, f"coredevice({host})"
+ 
+     # 2) Fallback to usbmux (USB) if pymobiledevice3 is installed.
+--- /dev/null
++++ b/PhoneAgent/CalendarHostView.swift
+@@ -0,0 +1,355 @@
++import SwiftUI
++import UIKit
++
++@MainActor
++final class CalendarHost: ObservableObject {
++    @Published var message = "请连接 Mac worker，并准备日历权限"
++    @Published var ready = false
++    @Published var authorized = false
++    @Published var modelReady = false
++    @Published var jobs: [PlanJob] = []
++    @Published var input = "明天上午9点到10点整理书架，11点到12点练琴，下午2点到3点写读书笔记，4点到5点散步。"
++    @Published var testMode = true
++    private let storage: PlanStore
++    private let calendar: CalendarBridge
++    private var server: SimulatorRPCServer?
++    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
++    private var deadline: Date?
++    private var timer: Timer?
++    private var heartbeat: Date = .distantPast
++    private var activeID: String?
++    private var storageFailed = false
++    private var lease: String = ""
++
++    init() {
++        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Wellphone")
++        storage = PlanStore(directory: directory)
++        calendar = CalendarBridge(executionLocation: "iphone_native_app", ledgerURL: directory.appendingPathComponent("ledger.json"))
++        do {
++            jobs = try storage.load()
++            for i in jobs.indices where ["queued", "parsing", "planned", "executing"].contains(jobs[i].state) {
++                let unknown = jobs[i].state == "executing"
++                jobs[i].state = unknown ? "unknown" : "window_expired"
++                jobs[i].message = unknown ? "执行期间进程结束，结果未知；请手动核验，不要重新提交" : "上次执行窗口已结束，没有自动重放"
++            }
++            try storage.save(jobs)
++        } catch { storageFailed = true; message = "本地记录无法读取，已禁用写入，请保留数据排查" }
++        calendar.mayWrite = { [weak self] in self?.canWrite ?? false }
++    }
++    private func error(_ text: String) -> NSError { NSError(domain: "Wellphone.Host", code: 1, userInfo: [NSLocalizedDescriptionKey: text]) }
++    private var canWrite: Bool {
++        let state = UIApplication.shared.applicationState
++        return CalendarExecutionPolicy.allows(foreground: state == .active, background: state == .background,
++            sessionActive: activeID != nil, storageHealthy: !storageFailed,
++            windowRemaining: deadline?.timeIntervalSinceNow ?? 0,
++            hasBackgroundAssertion: backgroundTask != .invalid,
++            backgroundRemaining: UIApplication.shared.backgroundTimeRemaining)
++    }
++    var busy: Bool { activeID != nil }
++    var canSubmit: Bool { ready && authorized && modelReady && Date().timeIntervalSince(heartbeat) < 5 && !busy && !storageFailed && !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
++    private func persist() throws {
++        do { try storage.save(jobs) }
++        catch { storageFailed = true; message = "手机记录保存失败，停止后续写入"; throw error }
++    }
++    func start() {
++        guard server == nil, UIApplication.shared.applicationState == .active else { return }
++        do {
++            server = try SimulatorRPCServer(onReady: { _ in Task { @MainActor in self.ready = true } }, onStop: {
++                Task { @MainActor in self.endWindow("连接已停止"); self.server = nil; self.ready = false }
++            }, commandHandler: { [weak self] method, params in
++                guard let self else { throw NSError(domain: "Wellphone.Host", code: 1) }
++                return try await self.handle(method, params)
++            })
++            server?.start()
++            Task { await refreshAuthorization() }
++        } catch { message = error.localizedDescription }
++    }
++    private func refreshAuthorization() async {
++        let status = try? await calendar.handle("calendar_status", [:])
++        authorized = status?["authorization"] as? String == "full_access"
++        if authorized { _ = try? await calendar.handle("calendar_lock", [:]) }
++    }
++    func prepare() {
++        guard UIApplication.shared.applicationState == .active, !busy else { return }
++        start()
++        Task {
++            do {
++                if !calendar.isLocked { _ = try await calendar.handle("calendar_prepare", ["allow_permission_prompt": true]) }
++                await refreshAuthorization()
++                message = authorized ? "权限已准备；等 Mac worker 连接后即可执行" : "需要完全日历访问权限，才能保存并独立读回验证"
++            } catch { message = error.localizedDescription }
++        }
++    }
++    private func openWindow(id: String) throws {
++        guard UIApplication.shared.applicationState == .active, !busy else { throw error("只能由用户在前台开启一次窗口") }
++        lease = UUID().uuidString
++        backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Wellphone pending plan") { [weak self] in
++            Task { @MainActor in self?.endWindow("系统后台窗口已结束，未执行项没有自动重试") }
++        }
++        guard backgroundTask != .invalid else { throw error("系统拒绝后台窗口") }
++        activeID = id; deadline = Date().addingTimeInterval(45)
++        timer = Timer.scheduledTimer(withTimeInterval: 45, repeats: false) { [weak self] _ in
++            Task { @MainActor in self?.endWindow("45 秒窗口已结束") }
++        }
++    }
++    func submit() {
++        guard canSubmit, input.count <= 4000 else { message = "请检查连接、权限、模型配置；输入上限 4000 字"; return }
++        do {
++            let id = UUID().uuidString
++            try openWindow(id: id)
++            jobs.insert(PlanJob(submission_id: id, task_id: id, version: 3, text: input,
++                submitted_at: ISO8601DateFormatter().string(from: Date()), time_zone: TimeZone.current.identifier,
++                test_mode: testMode, state: "queued", message: "输入已保存在手机，等待 Mac 接收", lease_id: lease), at: 0)
++            try persist()
++            message = "输入已保存在手机；等待 Mac 确认接收。可以切回游戏。"
++        } catch { message = error.localizedDescription; endWindow(message) }
++    }
++    func continueJob(_ id: String) {
++        guard ready, authorized, modelReady, Date().timeIntervalSince(heartbeat) < 5, !storageFailed,
++              let i = jobs.firstIndex(where: { $0.id == id }), jobs[i].state == "window_expired", jobs[i].plan != nil else { return }
++        do {
++            try openWindow(id: id)
++            jobs[i].lease_id = lease; jobs[i].state = "planned"; jobs[i].message = "用户主动继续同一计划；可留在此页或切回游戏"
++            try persist(); message = jobs[i].message
++        } catch { endWindow(error.localizedDescription) }
++    }
++    func sceneChanged(_ phase: ScenePhase) {
++        // Keep the same task and lease across foreground/background transitions.
++        // An expired lease remains expired; returning here never rearms old tasks.
++        if phase == .active { start(); Task { await refreshAuthorization() } }
++    }
++    private func endWindow(_ text: String) {
++        if let id = activeID, let i = jobs.firstIndex(where: { $0.id == id }), ["queued", "parsing", "planned"].contains(jobs[i].state) {
++            jobs[i].state = "window_expired"; jobs[i].message = "日历未执行：\(text)"; try? persist()
++        }
++        activeID = nil; deadline = nil; timer?.invalidate(); timer = nil
++        if backgroundTask != .invalid { UIApplication.shared.endBackgroundTask(backgroundTask); backgroundTask = .invalid }
++        message = text
++    }
++    private func hostStatus() -> [String: Any] {
++        let budget = UIApplication.shared.backgroundTimeRemaining
++        return ["application_state": UIApplication.shared.applicationState == .background ? "background" : (UIApplication.shared.applicationState == .active ? "foreground" : "inactive"),
++                "background_budget_seconds": budget < 1e9 ? budget : -1,
++                "window_remaining_seconds": max(0, deadline?.timeIntervalSinceNow ?? 0), "can_execute": canWrite,
++                "import_armed": busy]
++    }
++    private func index(_ p: [String: Any]) throws -> Int {
++        guard let id = p["submission_id"] as? String, let i = jobs.firstIndex(where: { $0.id == id }),
++              p["task_id"] as? String == jobs[i].task_id, p["version"] as? Int == jobs[i].version else { throw error("任务或版本不匹配") }
++        return i
++    }
++    private func handle(_ method: String, _ p: [String: Any]) async throws -> (result: Any, shouldStop: Bool) {
++        if method == "stop" { return ([:], true) }
++        if method == "calendar_status" {
++            var result = try await calendar.handle(method, p); result["host"] = hostStatus(); return (result, false)
++        }
++        if method == "plan_poll" {
++            heartbeat = Date(); modelReady = p["model_ready"] as? Bool == true
++            return (["jobs": jobs.map(\.wire), "host": hostStatus(), "authorized": authorized], false)
++        }
++        guard method.hasPrefix("plan_") else { throw error("本宿主只允许计划处理，不提供 UI 自动化或远程授权") }
++        let i = try index(p)
++        switch method {
++        case "plan_claim":
++            if jobs[i].state == "queued" { jobs[i].state = "parsing"; jobs[i].message = "Mac 已接收，正在理解；可以切回游戏"; try persist(); message = jobs[i].message }
++        case "plan_fail":
++            guard jobs[i].plan == nil, jobs[i].resultData == nil else { throw error("不能覆盖已有计划或结果") }
++            jobs[i].state = "failed"; jobs[i].message = p["message"] as? String ?? "模型失败"; try persist()
++            if activeID == jobs[i].id { endWindow(jobs[i].message) }
++        case "plan_store":
++            guard let raw = p["plan"] as? [String: Any] else { throw error("缺少计划") }
++            let data = try JSONSerialization.data(withJSONObject: raw, options: [.sortedKeys])
++            let plan = try JSONDecoder().decode(CalendarPlan.self, from: data); try plan.validate(text: jobs[i].text)
++            if jobs[i].version >= 2 && plan.items.contains(where: { $0.alerts == nil }) { throw error("新版计划缺少提醒契约") }
++            if jobs[i].version < 2 && plan.items.contains(where: { $0.alerts != nil }) { throw error("历史计划不能添加新提醒") }
++            if jobs[i].version >= 3 && plan.items.contains(where: { $0.calendar == nil }) { throw error("新版计划缺少日历能力契约，请更新 Mac worker") }
++            if jobs[i].version < 3 && plan.items.contains(where: { $0.calendar != nil }) { throw error("历史计划不能添加重复或其他新能力") }
++            if let old = jobs[i].planData { guard try AlertPolicy.canonicalPlan(AlertPolicy.object(old)) == AlertPolicy.canonicalPlan(raw) else { throw error("plan_conflict: 不可变计划已有不同内容") } }
++            else {
++                guard ["parsing", "queued", "window_expired"].contains(jobs[i].state) else { throw error("任务已结束，拒绝旧模型结果") }
++                jobs[i].plan = plan; jobs[i].planData = data
++                if activeID == jobs[i].id { jobs[i].state = "planned"; jobs[i].message = "计划已生成，准备在手机执行" }
++                else { jobs[i].state = "window_expired"; jobs[i].message = "计划已生成，日历未执行：后台窗口已结束" }
++                try persist()
++            }
++        case "plan_execute":
++            // Same lease replay returns the stored report. No new side effect.
++            if jobs[i].resultData != nil { return (jobs[i].wire, false) }
++            guard jobs[i].state == "planned", jobs[i].id == activeID, p["lease_id"] as? String == lease,
++                  let plan = jobs[i].plan else { throw error("未执行：计划状态或窗口不匹配；没有自动重放") }
++            if UIApplication.shared.applicationState == .inactive && (deadline?.timeIntervalSinceNow ?? 0) > 5 && !storageFailed {
++                // No reservation or EventKit call happened. The worker may wait for an
++                // eligible state and send the SAME lease; lost responses remain unknown.
++                var deferred = jobs[i].wire
++                deferred["execution_deferred"] = true
++                deferred["deferred_reason"] = "application_transition_no_writes"
++                return (deferred, false)
++            }
++            guard canWrite else { throw error("未执行：执行窗口或后台预算不足；没有自动重放") }
++            jobs[i].state = "executing"; jobs[i].message = "正在手机保存和读回"; try persist()
++            let host = hostStatus()
++            let executable = plan.items.filter { !$0.blocked && $0.policyIssue(in: plan.items) == nil }.map { $0.event(testMode: jobs[i].test_mode) }
++            var result: [String: Any]
++            if executable.isEmpty {
++                result = ["status": "not_created", "items": [], "execution_location": "iphone_native_app"]
++            } else {
++                let status = try await calendar.handle("calendar_status", [:])
++                result = try await calendar.handle("calendar_execute", ["session_id": status["session_id"]!, "task_id": jobs[i].task_id, "test_mode": jobs[i].test_mode, "items": executable])
++            }
++            var rows = result["items"] as? [[String: Any]] ?? []
++            rows += plan.items.filter(\.blocked).map { ["item_id": $0.item_id, "status": "not_created_missing_information", "save_status": "not_attempted", "verification_status": "not_attempted"] }
++            rows += plan.items.compactMap { item -> [String: Any]? in
++                guard let issue = item.policyIssue(in: plan.items) else { return nil }
++                return ["item_id": item.id, "status": "not_created_policy_rejected", "save_status": "not_attempted", "verification_status": "not_attempted", "error": ["message": issue]]
++            }
++            result["items"] = rows; result["host"] = host
++            let count = rows.filter { $0["status"] as? String == "verified" }.count
++            let savedCount = rows.filter { $0["save_status"] as? String == "saved" }.count
++            let state = !rows.isEmpty && count == rows.count ? "verified" : (savedCount > 0 ? "partial" : "not_completed")
++            result["status"] = state
++            jobs[i].resultData = try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys])
++            jobs[i].state = state
++            jobs[i].message = plan.overflow ? "超过 8 项，请减少事项后重新提交；本次未创建" : "\(count)/\(plan.items.count) 项完整完成；\(savedCount) 项事件已保存，日历字段与提醒详情见报告"
++            try persist()
++            // Report is durable before releasing the finite background assertion.
++            Task { @MainActor in try? await Task.sleep(for: .milliseconds(400)); self.endWindow("本次执行结束，可查看报告") }
++        default: throw error("未知计划方法")
++        }
++        return (jobs[i].wire, false)
++    }
++}
++
++struct CalendarHostView: View {
++    @StateObject private var host = CalendarHost()
++    @Environment(\.scenePhase) private var phase
++    var body: some View {
++        NavigationStack {
++            List {
++                Section("输入计划") {
++                    TextEditor(text: $host.input).frame(minHeight: 140).disabled(host.busy)
++                    HStack {
++                        Button("四条完整示例") { host.input = "明天上午9点到10点整理书架，11点到12点练琴，下午2点到3点写读书笔记，4点到5点散步。" }
++                        Button("混合示例") { host.input = "明天上午9点到10点和小丽吃早餐，餐厅还没定；后天找时间整理房间，时间随便安排；那个项目快截止了，具体哪天我不记得了；周五有已经预约的钢琴课，准确开始时间我不知道。" }
++                    }.buttonStyle(.borderless).disabled(host.busy)
++                    Text("系统会合理补齐可调整的信息；重要且无法确定的信息会保留为空，并在报告中说明。").font(.footnote)
++                    Button("提醒示例") { host.input = "三天后下午两点到三点练琴，提前一天和提前两小时各提醒一次；四天后下午三点到四点整理书架，请自行建议合适的提醒；五天后下午四点到五点散步，不用提醒。" }.disabled(host.busy)
++                    Button("重复与全天示例") { host.input = "每周五早上我都要去游泳，共四次，备注带泳镜；下周六到周日全天参加读书营，资料链接 https://example.com/reading 。这些都不用提醒。" }.disabled(host.busy)
++                    Text("支持每日／每周／每月／每年重复、全天和跨天、备注与链接；不支持的要求会在报告中说明。").font(.caption).foregroundStyle(.secondary)
++                    Toggle("测试模式（添加 Wellphone Test 前缀）", isOn: $host.testMode).disabled(host.busy)
++                    Button("执行") { host.submit() }.disabled(!host.canSubmit)
++                    Text(host.message).font(.callout)
++                }
++                Section("准备状态") {
++                    Text("连接：\(host.ready ? "手机服务已启动" : "未连接") · 模型：\(host.modelReady ? "Mac 已配置" : "等待 Mac worker") · 日历：\(host.authorized ? "完全访问" : "未授权")").font(.footnote)
++                    Button("准备连接和日历权限") { host.prepare() }.disabled(host.busy)
++                    Text("可留在此页完成，也可切回游戏继续执行。单次执行窗口最多 45 秒；后台时间可能被系统提前收回。提醒由系统日历触发，配置成功不保证通知送达。仅创建日历事项，不代表预约、订票或实际任务已完成。").font(.caption).foregroundStyle(.secondary)
++                }
++                Section("执行报告 · 保存在这台手机") {
++                    ForEach(host.jobs) { job in
++                        NavigationLink { PlanReportView(job: job, continueAction: { host.continueJob(job.id) }) } label: {
++                            VStack(alignment: .leading) { Text(job.text).lineLimit(2); Text(job.message).font(.caption).foregroundStyle(.secondary) }
++                        }
++                    }
++                }
++            }.navigationTitle("Wellphone")
++        }.onAppear { host.start() }.onChange(of: phase) { _, value in host.sceneChanged(value) }
++    }
++}
++struct PlanReportView: View {
++    let job: PlanJob
++    let continueAction: () -> Void
++    private var rows: [[String: Any]] { ((job.resultData.flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any])?["items"] as? [[String: Any]]) ?? [] }
++    private let labels = ["title": "标题", "start_at": "开始", "end_at": "结束", "time_zone": "时区", "location": "地点"]
++    var body: some View {
++        List {
++            Section("任务") { Text(job.text); Text(job.message); Text("状态：\(job.state) · 版本 \(job.version)").font(.caption)
++                if job.state == "window_expired", job.plan != nil { Button("继续执行这份计划", action: continueAction) }
++            }
++            ForEach(job.plan?.items ?? []) { item in
++                Section(item.fields["title"]?.value ?? "标题空缺") {
++                    let row = rows.first { $0["item_id"] as? String == item.id }
++                    Text("执行：\(row?["status"] as? String ?? (["unknown", "executing"].contains(job.state) ? "结果未知，等待核验" : "未执行"))")
++                    Text("保存：\(row?["save_status"] as? String ?? (["unknown", "executing"].contains(job.state) ? "未知" : "未尝试")) · 验证：\(row?["verification_status"] as? String ?? (["unknown", "executing"].contains(job.state) ? "未知" : "未尝试"))").font(.caption)
++                    if let c = item.calendar {
++                        Text("日历设置").font(.headline)
++                        Text(c.is_all_day ? "全天（结束日期为不包含的次日）" : "定时事件")
++                        Text("重复：\(c.recurrence.summary)")
++                        Text(c.recurrence.reason).font(.caption)
++                        Text("备注：\(c.notes ?? "未提供")")
++                        Text("链接：\(c.url ?? "未提供")")
++                        Text(c.reason).font(.caption)
++                        if !c.unsupported.isEmpty { Text("尚不支持，未创建：" + c.unsupported.joined(separator: "；")).foregroundStyle(.orange) }
++                        Text("以上为计划要求；保存与实际读回结果见本项下方记录。").font(.caption)
++                    }
++                    if let a = item.alerts {
++                        Text("提醒：\(alertMode(a.mode))").font(.headline)
++                        Text(a.reason).font(.caption)
++                        if let quote = a.evidence { Text("依据：\(quote)").font(.caption) }
++                        ForEach(a.items, id: \.alert_id) { alarm in
++                            Text("\(alarm.alert_id)：\(alarmDescription(alarm)) · \(alarm.source == "explicit" ? "用户明确要求" : "系统建议")").font(.caption)
++                            Text(alarm.reason).font(.caption)
++                        }
++                        if a.items.isEmpty { Text(a.mode == "disabled" ? "用户要求不提醒" : "无具体提醒配置").font(.caption) }
++                        if let actual = row?["alerts"] as? [String: Any] {
++                            Text("提醒读回：\(actual["verification_status"] as? String ?? "未验证") · 用户要求：\(actual["user_requirement_status"] as? String ?? "未知")").font(.caption)
++                            if let reason = actual["policy_message"] as? String { Text("未完成原因：\(reason)").font(.caption) }
++                            ForEach(Array((actual["decisions"] as? [[String: Any]] ?? []).enumerated()), id: \.offset) { _, decision in
++                                Text("\(decision["alert_id"] as? String ?? "")：\(decision["status"] as? String ?? "") \(decision["trigger_at"] as? String ?? "") \(decision["message"] as? String ?? "")").font(.caption)
++                            }
++                            ForEach(Array((actual["readback"] as? [[String: Any]] ?? []).enumerated()), id: \.offset) { _, alarm in
++                                Text("实际读回提醒：\(alarm["trigger_at"] as? String ?? "")（\(alarm["trigger_type"] as? String ?? "")）").font(.caption)
++                            }
++                        } else { Text("提醒尚未执行，以上只是请求或建议").font(.caption) }
++                        Text("已配置不等于通知已送达；受日历通知和专注模式等设置影响。").font(.caption)
++                    } else { Text("历史无提醒计划；未进行新版提醒验收。").font(.caption) }
++                    fieldGroup("自动补齐", item: item, sources: ["defaulted"])
++                    fieldGroup("仍然空缺", item: item, sources: ["unresolved"])
++                    fieldGroup("原文与上下文推导", item: item, sources: ["explicit", "inferred"])
++                    if let failure = row?["error"] as? [String: Any], let text = failure["message"] as? String { Text(text).foregroundStyle(.red) }
++                    if let read = row?["readback"] as? [String: Any] {
++                        Text("实际读回：\(read["title"] as? String ?? "")\n\(read["start_at"] as? String ?? "") → \(read["end_at"] as? String ?? "")").font(.caption)
++                        if item.calendar != nil {
++                            Text("日历扩展读回验证：\(row?["calendar_features_verification_status"] as? String ?? "未验证")").font(.caption)
++                            Text("全天：\(read["is_all_day"] as? Bool == true ? "是" : "否") · 重复规则：\(read["recurrence_count"] as? Int ?? 0) 条").font(.caption)
++                            Text("实际备注：\(read["notes"] as? String ?? "无")").font(.caption)
++                            Text("实际链接：\(read["url"] as? String ?? "无")").font(.caption)
++                            if let rules = read["recurrence_rules"] as? [[String: Any]], !rules.isEmpty {
++                                DisclosureGroup("查看实际重复规则") {
++                                    Text(pretty(rules)).font(.caption).textSelection(.enabled)
++                                }
++                            }
++                        }
++                    }
++                }
++            }
++        }.navigationTitle("执行报告")
++    }
++    private func pretty(_ value: Any) -> String {
++        guard let data = try? JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys]) else { return "读回格式不可用" }
++        return String(data: data, encoding: .utf8) ?? ""
++    }
++    private func alertMode(_ mode: String) -> String {
++        ["explicit": "用户明确要求", "disabled": "用户明确禁止", "suggested": "系统建议", "unresolved": "无法确定"][mode] ?? mode
++    }
++    private func alarmDescription(_ a: AlertSpec) -> String {
++        if a.trigger_type == "absolute" { return a.at ?? "时间空缺" }
++        guard let seconds = a.offset_seconds else { return "提前量空缺" }
++        if seconds == 0 { return "事件开始时" }
++        if seconds % 86400 == 0 { return "提前 \(-seconds / 86400) 天（每一天按24小时）" }
++        if seconds % 3600 == 0 { return "提前 \(-seconds / 3600) 小时" }
++        return "提前 \(-seconds / 60) 分钟"
++    }
++    @ViewBuilder private func fieldGroup(_ title: String, item: PlanItem, sources: [String]) -> some View {
++        Text(title).font(.headline)
++        if !item.fields.values.contains(where: { sources.contains($0.source) }) { Text("无").font(.caption) }
++        ForEach(["title", "start_at", "end_at", "time_zone", "location"], id: \.self) { name in
++                        if let field = item.fields[name], sources.contains(field.source) {
++                            VStack(alignment: .leading) {
++                                Text("\(labels[name] ?? name)：\(field.value ?? "空缺")")
++                                if let evidence = field.evidence { Text("原文：\(evidence)").font(.caption) }
++                                Text("\(field.source == "defaulted" ? "自动补齐" : field.source == "inferred" ? "上下文推导" : field.source == "unresolved" ? "仍然空缺" : "来自原文") · \(field.reason)\(field.blocks_creation ? " · 阻止创建" : "")").font(.caption).foregroundStyle(.secondary)
++                            }
++                        }
++                    }
++    }
++}
+--- a/PhoneAgent/ContentView.swift
++++ b/PhoneAgent/ContentView.swift
+@@ -11,16 +11,19 @@
+ struct ContentView: View {
+     enum AppState {
+         case rpcBridge
++        case calendarHost
+         case enterAPIKey
+         case prompt(String)
+     }
+ 
+     private static func initialAppState() -> AppState {
+         if ProcessInfo.processInfo.arguments.contains("--phoneagent-rpc-bridge") {
+-            .rpcBridge
+-        } else {
+-            KeychainHelper.load().map { .prompt($0) } ?? .enterAPIKey
++            return .rpcBridge
+         }
++        if ProcessInfo.processInfo.arguments.contains("--phoneagent-original") {
++            return KeychainHelper.load().map { .prompt($0) } ?? .enterAPIKey
++        }
++        return .calendarHost
+     }
+ 
+     @State private var state: AppState = Self.initialAppState()
+@@ -28,6 +31,8 @@
+ 
+     var body: some View {
+         switch state {
++        case .calendarHost:
++            CalendarHostView()
+         case .rpcBridge:
+             RPCBridgeModeView()
+         case .enterAPIKey:
+--- a/PhoneAgent/Info.plist
++++ b/PhoneAgent/Info.plist
+@@ -2,6 +2,10 @@
+ <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+ <plist version="1.0">
+ <dict>
++	<key>NSCalendarsFullAccessUsageDescription</key>
++	<string>Wellphone creates test events and reads them back to verify execution.</string>
++	<key>NSLocalNetworkUsageDescription</key>
++	<string>Connect to the paired Mac to receive a calendar import task.</string>
+ 	<key>UIBackgroundModes</key>
+ 	<array>
+ 		<string>audio</string>
+--- /dev/null
++++ b/PhoneAgentUITests/CalendarBridge.swift
+@@ -0,0 +1,273 @@
++import EventKit
++import Foundation
++
++// EventKit runs inside the iPhone process (runner or native host), never on the Mac.
++// MainActor serializes synchronous writes; preparation is the only permission prompt.
++final class CalendarBridge {
++    private let executionLocation: String
++    private let ledgerURL: URL?
++    private var storageError: String?
++    var mayWrite: (() -> Bool)?
++    init(executionLocation: String = "iphone_xctest_runner", ledgerURL: URL? = nil) {
++        self.executionLocation = executionLocation; self.ledgerURL = ledgerURL
++        if let ledgerURL, FileManager.default.fileExists(atPath: ledgerURL.path) {
++            do {
++                let raw = try JSONSerialization.jsonObject(with: Data(contentsOf: ledgerURL))
++                guard let rows = raw as? [String: [String: Any]] else { throw NSError(domain: "ledger", code: 1) }
++                for (key, row) in rows {
++                    guard let encoded = row["payload"] as? String, let payload = Data(base64Encoded: encoded),
++                          var result = row["result"] as? [String: Any] else { throw NSError(domain: "ledger", code: 2) }
++                    if result["save_status"] as? String == "attempted" {
++                        result["save_status"] = "unknown"; result["status"] = "unknown"
++                        result["error"] = ["message": "Process ended during save; inspect calendar. Never recreate automatically."]
++                    }
++                    ledger[key] = (payload, result)
++                }
++            } catch { storageError = "ledger_unreadable: no writes allowed" }
++        }
++    }
++    private func persistLedger() throws {
++        guard storageError == nil else { throw failure(storageError!) }
++        guard let ledgerURL else { return }
++        let rows = ledger.mapValues { ["payload": $0.payload.base64EncodedString(), "result": $0.result] as [String: Any] }
++        do {
++            try FileManager.default.createDirectory(at: ledgerURL.deletingLastPathComponent(), withIntermediateDirectories: true)
++            try JSONSerialization.data(withJSONObject: rows, options: [.sortedKeys]).write(to: ledgerURL, options: .atomic)
++        } catch { storageError = "ledger_write_failed: stopped further writes"; throw error }
++    }
++    private var scope: String { ledgerURL == nil ? "this_runner_session_only" : "persistent_reservations_not_exactly_once" }
++    private let sessionID = UUID().uuidString
++    private var store = EKEventStore()
++    private var preparing = false
++    private(set) var isLocked = false
++    private var ledger: [String: (payload: Data, result: [String: Any])] = [:]
++
++    private func now() -> String { Self.format(Date()) }
++    private static func format(_ date: Date) -> String {
++        let f = ISO8601DateFormatter()
++        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
++        return f.string(from: date)
++    }
++
++    private var authorized: Bool { EKEventStore.authorizationStatus(for: .event) == .fullAccess }
++    private func status() -> [String: Any] {
++        let auth = EKEventStore.authorizationStatus(for: .event)
++        let label: String
++        switch auth {
++        case .notDetermined: label = "not_determined"
++        case .restricted: label = "restricted"
++        case .denied: label = "denied"
++        case .fullAccess: label = "full_access"
++        case .writeOnly: label = "write_only"
++        @unknown default: label = "unknown"
++        }
++        return ["session_id": sessionID, "authorization": label, "calendar_only": isLocked,
++                "preparing": preparing, "device_time": now(), "execution_location": executionLocation,
++                "deduplication_scope": scope, "ledger_items": ledger.count,
++                "runner_usage_description_present": Bundle.main.object(forInfoDictionaryKey: "NSCalendarsFullAccessUsageDescription") != nil]
++    }
++
++    @MainActor
++    func handle(_ method: String, _ params: [String: Any]) async throws -> [String: Any] {
++        switch method {
++        case "calendar_status": return status()
++        case "calendar_prepare":
++            guard !isLocked, !preparing else { throw failure("Preparation unavailable after lock or during another preparation") }
++            guard params["allow_permission_prompt"] as? Bool == true else {
++                throw failure("Preparation requires allow_permission_prompt=true; run before gaming")
++            }
++            preparing = true
++            defer { preparing = false }
++            if !authorized { _ = try await store.requestFullAccessToEvents() }
++            preparing = false
++            return status()
++        case "calendar_lock":
++            guard !preparing, authorized else { throw failure("Full calendar access is required before locking") }
++            isLocked = true // Irreversible for this runner session.
++            return status()
++        case "calendar_execute":
++            guard !preparing, isLocked else { throw failure("Prepare and lock the calendar-only session first") }
++            guard params["session_id"] as? String == sessionID else {
++                throw failure("session_mismatch: runner restarted or wrong session; do not automatically resend old tasks")
++            }
++            let taskID = try identifier(params["task_id"], name: "task_id")
++            guard let items = params["items"] as? [[String: Any]], (1...(executionLocation == "iphone_native_app" ? 8 : 3)).contains(items.count),
++                  Set(params.keys).isSubset(of: ["session_id", "task_id", "items", "test_mode"]) else {
++                throw failure("Expected session_id, task_id and 1...3 items only")
++            }
++            let received = now()
++            let results = items.map { executeItem(taskID: taskID, item: $0, testMode: params["test_mode"] as? Bool ?? true) }
++            let verified = results.filter { $0["status"] as? String == "verified" }.count
++            return ["session_id": sessionID, "task_id": taskID, "received_at": received,
++                    "completed_at": now(), "execution_location": executionLocation,
++                    "status": verified == items.count ? "verified" : (results.contains { $0["save_status"] as? String == "saved" } ? "partial" : "failed"),
++                    "items": results, "deduplication_scope": scope]
++        default: throw failure("Unknown calendar RPC")
++        }
++    }
++
++    private func failure(_ message: String) -> NSError {
++        NSError(domain: "Wellphone.Calendar", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
++    }
++    private func identifier(_ value: Any?, name: String) throws -> String {
++        guard let s = value as? String, s.range(of: "^[A-Za-z0-9_-]{1,80}$", options: .regularExpression) != nil else {
++            throw failure("\(name) must contain 1...80 ASCII letters, digits, underscores or hyphens")
++        }
++        return s
++    }
++
++    private func executeItem(taskID: String, item: [String: Any], testMode: Bool) -> [String: Any] {
++        let received = now()
++        var result: [String: Any] = ["task_id": taskID, "item_id": item["item_id"] ?? NSNull(),
++            "request": item, "received_at": received, "saved_at": NSNull(), "verified_at": NSNull(),
++            "event_id": NSNull(), "readback": NSNull(), "error": NSNull(), "status": "failed",
++            "save_status": "not_attempted", "verification_status": "not_attempted", "deduplicated": false]
++        var key: String?
++        var payload: Data?
++        do {
++            let itemID = try identifier(item["item_id"], name: "item_id")
++            key = taskID + "/" + itemID
++            payload = try AlertPolicy.canonicalPayload(item)
++            if let prior = ledger[key!] {
++                guard try AlertPolicy.canonicalPayload(AlertPolicy.object(prior.payload)) == payload else { throw failure("id_conflict: same task_id/item_id has different content") }
++                var replay = prior.result
++                replay["deduplicated"] = true
++                replay["retry_received_at"] = received
++                // A replay reports the original observation; it does not claim a new readback.
++                return replay
++            }
++            guard storageError == nil else { throw failure(storageError!) }
++            guard mayWrite?() ?? true else {
++                result["status"] = "not_executed_window_expired"
++                throw failure("background_budget_insufficient: no save attempted")
++            }
++            let request = try CalendarEventInput(item, productMode: executionLocation == "iphone_native_app", testMode: testMode)
++            guard authorized else { throw failure("permission_missing: full access required; no prompt during execution") }
++            guard let calendar = store.defaultCalendarForNewEvents, calendar.allowsContentModifications else {
++                throw failure("No writable default calendar; configure Calendar manually before another session")
++            }
++            let event = EKEvent(eventStore: store)
++            event.calendar = calendar
++            event.title = request.title
++            event.location = request.location
++            event.startDate = request.start
++            event.endDate = request.end
++            event.timeZone = request.zone
++            event.isAllDay = request.features?.is_all_day ?? false
++            event.url = request.features?.url.flatMap(URL.init(string:))
++            let recurring = request.features?.recurrence.mode == "repeat"
++            let alertEvaluation = AlertPolicy.evaluate(request.alerts, start: request.start, zone: request.zone, now: Date(), recurring: recurring)
++            if request.alerts != nil {
++                result["alerts"] = alertEvaluation.wire
++                result["event_verification_status"] = "not_attempted"
++            }
++            event.alarms = alertEvaluation.configured.map { alarm in
++                alarm.type == "relative" ? EKAlarm(relativeOffset: Double(alarm.offset!)) : EKAlarm(absoluteDate: alarm.fire)
++            }
++            event.recurrenceRules = request.features?.recurrence.eventKitRule(zone: request.zone).map { [$0] }
++            let marker = "Wellphone task_id=\(taskID) item_id=\(itemID)"
++            let expectedNotes = request.features?.notes.map { $0 + "\n\n" + marker } ?? marker
++            event.notes = expectedNotes
++            // Record reservation before the side effect; a save error is conservatively not retried.
++            result["save_status"] = "attempted"
++            ledger[key!] = (payload!, result)
++            try persistLedger() // durable reservation MUST precede EventKit
++            try store.save(event, span: recurring ? .futureEvents : .thisEvent, commit: true)
++            result["saved_at"] = now()
++            result["save_status"] = "saved"
++            result["status"] = "saved_unverified"
++            let eventID = event.eventIdentifier
++            result["event_id"] = eventID ?? NSNull() as Any
++            ledger[key!] = (payload!, result)
++            try persistLedger()
++
++            // Fresh store query by the saved identifier. Do not return the original EKEvent
++            // and call that verification. No enumeration of unrelated private events.
++            let reader = EKEventStore()
++            guard let eventID, let read = reader.event(withIdentifier: eventID) else {
++                throw failure("readback_missing: saved event could not be queried")
++            }
++            let readback: [String: Any] = ["title": read.title ?? "", "start_at": Self.format(read.startDate),
++                "end_at": Self.format(read.endDate), "time_zone": read.timeZone?.identifier ?? "",
++                "location": read.location ?? NSNull() as Any, "is_all_day": read.isAllDay, "alarm_count": read.alarms?.count ?? 0,
++                "attendee_count": read.attendees?.count ?? 0, "recurrence_count": read.recurrenceRules?.count ?? 0]
++            var fullReadback = readback
++            let alarms = read.alarms ?? []
++            let rawAlarms: [[String: Any]] = alarms.map { alarm in
++                let fire = alarm.absoluteDate ?? read.startDate.addingTimeInterval(alarm.relativeOffset)
++                return ["trigger_type": alarm.absoluteDate == nil ? "relative" : "absolute",
++                        "offset_seconds": alarm.relativeOffset,
++                        "absolute_at": alarm.absoluteDate.map(Self.format) as Any? ?? NSNull(),
++                        "trigger_at": Self.format(fire), "has_location": alarm.structuredLocation != nil,
++                        "proximity": alarm.proximity.rawValue]
++            }
++            fullReadback["alarms"] = rawAlarms
++            if request.features != nil {
++                fullReadback["notes"] = read.notes ?? NSNull() as Any
++                fullReadback["url"] = read.url?.absoluteString ?? NSNull() as Any
++                fullReadback["recurrence_rules"] = RecurrenceRequest.snapshot(read.recurrenceRules)
++                result["calendar_features_verification_status"] = "not_attempted"
++            }
++            result["readback"] = fullReadback
++            let alertsMatch = AlertPolicy.matches(alertEvaluation.configured.map(\.fire),
++                alarms.map { $0.absoluteDate ?? read.startDate.addingTimeInterval($0.relativeOffset) },
++                unsupported: alarms.contains { $0.structuredLocation != nil || $0.proximity != .none || (recurring && $0.absoluteDate != nil) })
++            if request.alerts != nil {
++                var alertResult = alertEvaluation.wire
++                alertResult["readback"] = rawAlarms
++                alertResult["verified_at"] = now()
++                alertResult["verification_status"] = alertsMatch ? "verified" : "failed"
++                if request.alerts?.mode != "suggested" {
++                    alertResult["user_requirement_status"] = alertsMatch && alertEvaluation.complete ? "met" : "unmet"
++                }
++                result["alerts"] = alertResult
++            }
++            guard read.title == request.title,
++                  abs(read.startDate.timeIntervalSince(request.start)) < 1,
++                  abs(read.endDate.timeIntervalSince(request.end)) < 1,
++                  read.timeZone?.identifier == request.zone.identifier,
++                  (read.location ?? "") == (request.location ?? ""), read.isAllDay == (request.features?.is_all_day ?? false),
++                  (read.attendees ?? []).isEmpty,
++                  request.features?.recurrence.matches(read.recurrenceRules, zone: request.zone) ?? (read.recurrenceRules ?? []).isEmpty,
++                  request.features == nil || (read.notes == expectedNotes && read.url == request.features?.url.flatMap(URL.init(string:))) else {
++                throw failure("readback_mismatch: saved fields differ; inspect this event manually")
++            }
++            if request.features != nil { result["calendar_features_verification_status"] = "verified" }
++            if request.alerts != nil { result["event_verification_status"] = "verified" }
++            guard alertsMatch else { throw failure("alarm_readback_mismatch: inspect saved event; never recreate automatically") }
++            result["verified_at"] = now()
++            result["verification_status"] = "verified"
++            result["status"] = alertEvaluation.complete ? "verified" : "partial"
++        } catch {
++            let e = error as NSError
++            result["error"] = ["message": e.localizedDescription, "domain": e.domain, "code": e.code]
++            if result["save_status"] as? String == "saved" {
++                result["verification_status"] = "failed"
++                if item["calendar"] != nil && result["calendar_features_verification_status"] as? String != "verified" { result["calendar_features_verification_status"] = "failed" }
++                if item["alerts"] != nil {
++                    if result["event_verification_status"] as? String != "verified" {
++                        result["event_verification_status"] = "failed"
++                        if var a = result["alerts"] as? [String: Any], a["user_requirement_status"] as? String == "met" {
++                            a["user_requirement_status"] = "unmet"; result["alerts"] = a
++                        }
++                    }
++                    if var a = result["alerts"] as? [String: Any], a["verification_status"] as? String == "not_attempted" {
++                        a["verification_status"] = "failed"
++                        if a["user_requirement_status"] as? String == "pending_verification" { a["user_requirement_status"] = "unknown" }
++                        result["alerts"] = a
++                    }
++                }
++            } else if result["save_status"] as? String == "attempted" {
++                result["status"] = "unknown"
++                result["save_status"] = "unknown" // Do not assume a thrown save is safe to repeat.
++            }
++        }
++        // Never replace the ledger for a conflicting payload.
++        if let key, let payload, ledger[key] == nil || ledger[key]?.payload == payload {
++            ledger[key] = (payload, result)
++            do { try persistLedger() }
++            catch { result["persistence_error"] = "Durable ledger unavailable; do not resubmit with new IDs" }
++        }
++        return result
++    }
++}
+--- /dev/null
++++ b/PhoneAgentUITests/CalendarEventInput.swift
+@@ -0,0 +1,65 @@
++import Foundation
++
++// Kept independent of EventKit so time/schema validation can be exercised without writes.
++struct CalendarEventInput {
++    let title: String
++    let start: Date
++    let end: Date
++    let zone: TimeZone
++    let location: String?
++    let alerts: AlertRequest?
++    let features: CalendarFeatures?
++
++    init(_ item: [String: Any], now: Date = Date(), productMode: Bool = false, testMode: Bool = true) throws {
++        func invalid(_ text: String) -> NSError {
++            NSError(domain: "Wellphone.Validation", code: 1, userInfo: [NSLocalizedDescriptionKey: text])
++        }
++        guard Set(item.keys).isSubset(of: Set(["item_id", "title", "start_at", "end_at", "time_zone"] + (productMode ? ["location", "alerts", "calendar"] : []))),
++              let title = item["title"] as? String, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, (!testMode || title.hasPrefix("Wellphone Test ")), title.count <= 160,
++              let zoneName = item["time_zone"] as? String,
++              TimeZone.knownTimeZoneIdentifiers.contains(zoneName), let zone = TimeZone(identifier: zoneName) else {
++            throw invalid("Expected item_id/title/start_at/end_at/time_zone only; test title prefix and IANA time zone required")
++        }
++        func parse(_ value: Any?) throws -> Date {
++            guard let s = value as? String,
++                  s.range(of: #"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$"#, options: .regularExpression) != nil else {
++                throw invalid("Use ISO 8601 seconds with an explicit UTC offset, e.g. 2026-09-28T14:00:00+08:00")
++            }
++            let f = ISO8601DateFormatter()
++            guard let date = f.date(from: s) else { throw invalid("Invalid ISO 8601 date") }
++            // Reject normalized invalid dates and offsets inconsistent with the named zone.
++            let roundtrip = DateFormatter()
++            roundtrip.locale = Locale(identifier: "en_US_POSIX")
++            roundtrip.calendar = Calendar(identifier: .gregorian)
++            roundtrip.timeZone = zone
++            roundtrip.dateFormat = "yyyy-MM-dd'T'HH:mm:ssXXXXX"
++            guard roundtrip.string(from: date) == s else { throw invalid("Date or offset does not match time_zone") }
++            return date
++        }
++        if let raw = item["calendar"] {
++            features = try JSONDecoder().decode(CalendarFeatures.self, from: JSONSerialization.data(withJSONObject: raw))
++            try features?.validate()
++            guard features?.blocked != true else { throw invalid("日历功能或重复要求未解决，未创建") }
++        } else { features = nil }
++        let start = try parse(item["start_at"])
++        let end = try parse(item["end_at"])
++        var calendar = Calendar(identifier: .gregorian)
++        calendar.timeZone = zone
++        guard (productMode ? start > now : start >= calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))!),
++              end > start, end <= calendar.date(byAdding: .day, value: features == nil ? 1 : 366, to: start)! else {
++            throw invalid("Event must start in the permitted future range, end after start and stay within the supported duration (legacy 1 day, v3 366 local days)")
++        }
++        if features?.is_all_day == true {
++            guard calendar.startOfDay(for: start) == start, calendar.startOfDay(for: end) == end else {
++                throw invalid("全天事件必须使用当地零点与排他结束日期")
++            }
++        }
++        try features?.recurrence.validateAnchor(start: start, zone: zone)
++        if let raw = item["alerts"] {
++            alerts = try JSONDecoder().decode(AlertRequest.self, from: JSONSerialization.data(withJSONObject: raw))
++            try alerts?.validate()
++        } else { alerts = nil }
++        self.location = item["location"] as? String
++        self.title = title; self.start = start; self.end = end; self.zone = zone
++    }
++}
+--- a/PhoneAgentUITests/PhoneAgentUITests.swift
++++ b/PhoneAgentUITests/PhoneAgentUITests.swift
+@@ -18,6 +18,7 @@
+     var lastRequest: OpenAIRequest?
+     var app: XCUIApplication?
+     private var rpcServer: SimulatorRPCServer?
++    let calendarBridge = CalendarBridge()
+ 
+     override func setUpWithError() throws {
+         continueAfterFailure = false
+@@ -69,8 +70,14 @@
+             },
+             commandHandler: { [weak self] method, parameters in
+                 guard let self else { throw PhoneAgent.Error.serverShutDown }
++                if method.hasPrefix("calendar_") {
++                    return (try await self.calendarBridge.handle(method, parameters), false)
++                }
+                 return try await MainActor.run {
+-                    try self.handleRPC(method: method, parameters: parameters)
++                    if self.calendarBridge.isLocked && method != "stop" {
++                        throw PhoneAgent.Error.invalidCommand("Calendar-only mode rejects \(method)")
++                    }
++                    return try self.handleRPC(method: method, parameters: parameters)
+                 }
+             }
+         )
+--- a/.agents/skills/phoneagent/scripts/start_rpc_bridge_local.sh
++++ b/.agents/skills/phoneagent/scripts/start_rpc_bridge_local.sh
+@@ -254,4 +254,12 @@
+   XCODEBUILD_ARGS+=("${XCODEBUILD_CODESIGN_ARGS[@]}")
+ fi
+ 
++# Optional preparation of the generated runner (e.g. modern privacy usage keys).
++# Keep device discovery, signing, forwarding and XCTest entry point unchanged.
++if [[ -n "${PHONEAGENT_RUNNER_PREPARE_SCRIPT:-}" ]]; then
++  XCODEBUILD_ARGS[1]=build-for-testing
++  "${XCODEBUILD_ARGS[@]}"
++  "$PYTHON" "$PHONEAGENT_RUNNER_PREPARE_SCRIPT" "$REPO_ROOT" "$IS_SIMULATOR"
++  XCODEBUILD_ARGS[1]=test-without-building
++fi
+ "${XCODEBUILD_ARGS[@]}"

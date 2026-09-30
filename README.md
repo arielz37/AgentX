@@ -15,6 +15,12 @@ flowchart LR
 
 **自适应提醒更新：已实现并通过编译、离线回归和四组真实模型测试；真机前台三项事件与提醒已保存并独立读回；后台与通知触发尚待验收。** 旧任务保持无提醒。[规则与测试](docs/adaptive-alerts.md)。
 
+**日历能力更新：已实现真实重复规则、全天／跨天、备注与链接；离线回归、六组 GPT 解析和签名构建通过，真机验收状态见[能力与验证说明](docs/calendar-capabilities.md)。**
+
+已按用户要求回退本轮日期计算与全天边界修复，保留重复／全天／跨天／备注／链接能力。相对日期仍由模型解析，先前日期误解可能再次出现；[诊断记录（已回退）](docs/temporal-root-cause.md)。
+
+新增[写入前模型复核](docs/model-review.md)：首稿经独立复核通过或纠正后才执行；复核失败不放行。两轮共用时间预算，有限合成样本通过，不保证所有语义正确。只需更新 Mac worker。
+
 ## 启动
 
 **日常使用：连接并解锁 iPhone，双击项目根目录的 [启动 Wellphone.command](启动%20Wellphone.command)，再手动打开手机 Wellphone。** 自动启动或复用转发器与 worker；使用期间保持服务窗口开启、Mac 不休眠。[详细说明与排错](docs/launcher.md)。
@@ -37,8 +43,8 @@ python3 scripts/wellphone_worker.py
 
 ## 配置与边界
 
-`.env.example`：`OPENAI_API_KEY`、可选 `WELLPHONE_MODEL`（默认 `gpt-4.1-mini`）和 `HTTPS_PROXY`；密钥仅 Mac。RPC `127.0.0.1:45678`。最多 8 项、未来定时事件，支持用户指定或模型建议的最多两次时间提醒；暂不支持全天/邀请/位置提醒。系统可提前结束 45 秒应用窗口；过期保留计划，需用户主动继续。无 XCTest、音频保活或前台自动化回退。持久化防重不等于严格恰好一次；未知结果禁止自动重建。原始输入、日志、事件 ID 与个人签名仅保留本机。
+`.env.example`：`OPENAI_API_KEY`、可选 `WELLPHONE_MODEL`（默认 `gpt-4.1-mini`）和 `HTTPS_PROXY`；密钥仅 Mac。RPC `127.0.0.1:45678`。最多 8 项、未来定时／全天／跨天事件，支持公历重复（每日、每周、每月、每年及结束条件）、备注、原文链接及最多两次提醒；暂不支持邀请、农历、位置提醒、修改或删除已有事项。系统可提前结束 45 秒应用窗口；过期保留计划，需用户主动继续。无 XCTest、音频保活或前台自动化回退。持久化防重不等于严格恰好一次；未知结果禁止自动重建。原始输入、日志、事件 ID 与个人签名仅保留本机。
 
 [Day 3 实测报告](docs/day3-report.md) · [部署与限制](docs/day3.md) · [Day 2 真实证据](docs/day2.md) · [Day 1 基线](docs/day1.md)
 
-上游固定 `4f0e201572c2cc6f36bab1e1f80c61878b4a90b7`，保留 MIT 归属。源码通过 `patches/phoneagent-alerts.patch` 和配置脚本复现，无不可获取的 submodule 提交。验证：`python3 -m unittest discover -s tests -p 'test_*.py'`。
+上游固定 `4f0e201572c2cc6f36bab1e1f80c61878b4a90b7`，保留 MIT 归属。源码通过 `patches/phoneagent-calendar-features.patch` 和配置脚本复现，无不可获取的 submodule 提交。验证：`python3 -m unittest discover -s tests -p 'test_*.py'`。

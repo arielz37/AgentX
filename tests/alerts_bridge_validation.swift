@@ -71,6 +71,54 @@ import EventKit
         let oldResult=try await execute(old,os,item(nil))
         precondition(oldResult["status"] as? String == "verified" && oldResult["alerts"] == nil)
         _=try await execute(old,os,item());precondition(EKEventStore.saves == 1)
+        var civil = Calendar(identifier:.gregorian);civil.timeZone=TimeZone(identifier:"Africa/Abidjan")!
+        let weekday=(civil.component(.weekday,from:start)+5)%7+1
+        func capabilities(_ count: Int = 4) -> CalendarFeatures {
+            let rule=RecurrenceRequest(mode:"repeat",frequency:"weekly",interval:2,weekdays:[weekday,weekday % 7 + 1],month_days:[],months:[],end_type:"count",count:count,until:nil,evidence:"重复",reason:"测试")
+            return CalendarFeatures(is_all_day:false,notes:"带泳镜",url:"https://example.com/swim",recurrence:rule,reason:"明确要求",unsupported:[])
+        }
+        func recurringItem(_ count: Int = 4) -> [String:Any] { var value=item();value["calendar"]=capabilities(count).wire;return value }
+        let (series,ss,surl)=try await setup("series")
+        let seriesResult=try await execute(series,ss,recurringItem())
+        precondition(seriesResult["status"] as? String == "verified" && EKEventStore.saves == 1)
+        precondition(seriesResult["calendar_features_verification_status"] as? String == "verified")
+        let read=seriesResult["readback"] as! [String:Any]
+        precondition(read["recurrence_count"] as? Int == 1 && read["url"] as? String == "https://example.com/swim")
+        precondition((read["notes"] as! String).hasPrefix("带泳镜"))
+        let different=try await execute(series,ss,recurringItem(5))
+        precondition(different["status"] as? String == "failed" && EKEventStore.saves == 1)
+        let restartedSeries=CalendarBridge(executionLocation:"iphone_native_app",ledgerURL:surl);restartedSeries.mayWrite={true}
+        _=try await restartedSeries.handle("calendar_lock",[:]);let sstatus=try await restartedSeries.handle("calendar_status",[:])
+        var reordered=recurringItem();var featureWire=capabilities().wire;var r=featureWire["recurrence"] as! [String:Any];r["weekdays"]=[weekday % 7 + 1,weekday];featureWire["recurrence"]=r;reordered["calendar"]=featureWire
+        let repeated=try await execute(restartedSeries,sstatus["session_id"] as! String,reordered)
+        precondition(repeated["deduplicated"] as? Bool == true && EKEventStore.saves == 1)
+        for mutation in ["drop_rule","interval","count","notes","url","all_day","absolute_alarm"] {
+            let (b,s,_)=try await setup("series-"+mutation)
+            EKEventStore.readTransform = { e in
+                switch mutation {
+                case "drop_rule": e.recurrenceRules=[]
+                case "interval": e.recurrenceRules?[0].interval=1
+                case "count": e.recurrenceRules?[0].recurrenceEnd?.occurrenceCount=99
+                case "notes": e.notes="lost notes"
+                case "url": e.url=nil
+                case "all_day": e.isAllDay=true
+                default: e.alarms=e.alarms?.map { EKAlarm(absoluteDate:e.startDate.addingTimeInterval($0.relativeOffset)) }
+                }
+                return e
+            }
+            let mismatch=try await execute(b,s,recurringItem())
+            precondition(mismatch["save_status"] as? String == "saved" && mismatch["verification_status"] as? String == "failed")
+            _=try await execute(b,s,recurringItem());precondition(EKEventStore.saves == 1)
+        }
+        let (allDay,ads,_)=try await setup("all-day")
+        let noRule=RecurrenceRequest(mode:"none",frequency:nil,interval:1,weekdays:[],month_days:[],months:[],end_type:"never",count:nil,until:nil,evidence:nil,reason:"无重复")
+        var entire=item(nil)
+        let dayStart=civil.startOfDay(for:start)
+        entire["start_at"]=AlertPolicy.format(dayStart);entire["end_at"]=AlertPolicy.format(civil.date(byAdding:.day,value:3,to:dayStart)!)
+        entire["calendar"]=CalendarFeatures(is_all_day:true,notes:"多日活动",url:nil,recurrence:noRule,reason:"三天全天",unsupported:[]).wire
+        let allDayResult=try await execute(allDay,ads,entire)
+        precondition(allDayResult["status"] as? String == "verified" && (allDayResult["readback"] as! [String:Any])["is_all_day"] as? Bool == true)
+        print("PASS calendar capabilities TEST DOUBLE: single series save, all-day span, persisted dedup/conflict, altered recurrence/notes/url/all-day/alarms never falsely verified.")
         print("PASS EventKit TEST DOUBLE: reservation-before-save, fresh readback, partial fulfillment, durable retry/conflict, failures and legacy. No real calendar writes.")
     }
 }

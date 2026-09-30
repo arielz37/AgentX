@@ -34,8 +34,16 @@ def markdown(doc):
     job = doc.get('phone', {})
     lines = ['# Wellphone 执行报告', '', '任务：' + job.get('submission_id', '—'),
              '手机状态：' + job.get('state', '尚未读取'), job.get('message', ''), '',
-             '模型解析耗时（Mac）：' + str(doc.get('model_elapsed_seconds', '未测量')) + ' 秒',
+             '模型处理总耗时（Mac，含复核）：' + str(doc.get('model_elapsed_seconds', '未测量')) + ' 秒',
              '执行发送记录：' + json.dumps(doc.get('attempts', {}), ensure_ascii=False), '']
+    review = doc.get('model', {}).get('review')
+    if review:
+        lines += ['模型复核：' + review.get('status', '未知'),
+                  '复核耗时：' + str(doc.get('model', {}).get('review_seconds', '未测量')) + ' 秒',
+                  '复核发现：' + json.dumps(review.get('result', {}).get('issues', []), ensure_ascii=False),
+                  '实际修改：' + json.dumps(review.get('changes', []), ensure_ascii=False),
+                  '复核是模型检查，不能代替手机保存与独立读回，也不保证理解绝对正确。', '']
+    else: lines += ['模型复核：历史任务未记录；不自动重新解析或执行。', '']
     plan = job.get('plan') or doc.get('plan') or {}
     rows = {r['item_id']: r for r in job.get('execution', {}).get('items', [])}
     for item in plan.get('items', []):
@@ -45,6 +53,12 @@ def markdown(doc):
                   '保存：' + row.get('save_status', '未知' if job.get('state') in ('unknown', 'executing') else '未尝试') + '；独立读回：' + row.get('verification_status', '未知' if job.get('state') in ('unknown', 'executing') else '未尝试')]
         for name, f in fields.items():
             lines.append(f"- {name}：{f['value'] or '空缺'} [{f['source']}]；{f['reason']}；阻止创建={f['blocks_creation']}")
+        features = item.get('calendar')
+        if features:
+            lines += ['日历要求（实际结果以下方读回为准）：' + json.dumps(features, ensure_ascii=False),
+                      '全天事件的结束日期为排他边界；重复是一条系列，未来发生由系统日历生成。']
+            if features['unsupported'] or features['recurrence']['mode'] == 'unresolved':
+                lines.append('日历要求未解决，本项不降级为单次事件。')
         alerts = item.get('alerts')
         if alerts is None:
             lines.append('历史无提醒计划；不作新版提醒验收声明。')
@@ -105,6 +119,7 @@ class Worker:
                     # Do not include arbitrary provider response/header contents.
                     doc['model_error'] = str(error) if isinstance(error, (RuntimeError, ValueError)) else type(error).__name__
                     if hasattr(error, 'rejected_plan'): doc['rejected_plan'] = error.rejected_plan
+                    if hasattr(error, 'model_metadata'): doc['model'] = error.model_metadata
                 doc['model_elapsed_seconds'] = round(time.monotonic() - started, 3)
                 self.save(path, doc)
         if doc.get('model_error') and not job.get('plan'):

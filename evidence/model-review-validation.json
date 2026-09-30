@@ -1,0 +1,42 @@
+{
+  "date": "2026-09-29",
+  "scope": "Mac generation + single independent model review; synthetic data only",
+  "python_tests": 54,
+  "real_model_final_round": [
+    {
+      "probe": "wrong_week",
+      "status": "passed",
+      "seconds": 8.248,
+      "review_status": "corrected",
+      "errors": []
+    },
+    {
+      "probe": "correct_plan",
+      "status": "passed",
+      "seconds": 4.295,
+      "review_status": "passed",
+      "errors": []
+    },
+    {
+      "probe": "end_to_end",
+      "status": "passed",
+      "seconds": 6.188,
+      "review_status": "passed",
+      "errors": []
+    }
+  ],
+  "earlier_round_findings": [
+    "review could correct wrong week but damage a valid same-day recurring start",
+    "first probe initially omitted unchanged recurring anchor assertion; corrected",
+    "generation and review role instructions separated; comparisons provided as context"
+  ],
+  "calendar_writes": 0,
+  "device_or_background_acceptance": "not_performed",
+  "activation": "Mac worker restarted with new review code; phone RPC currently unavailable; no device task submitted",
+  "limitations": [
+    "same model may repeat mistakes or introduce new errors",
+    "three final probes are not a statistical accuracy benchmark",
+    "additional request consumes shared timeout budget and tokens",
+    "review details in Mac reports; phone displays final fields and execution status"
+  ]
+}

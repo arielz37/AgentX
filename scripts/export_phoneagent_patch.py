@@ -6,7 +6,7 @@ import subprocess
 
 root = Path(__file__).resolve().parents[1]
 repo = root / "PhoneAgent"
-paths = ["PhoneAgentUITests/AdaptiveAlerts.swift", "PhoneAgent/PlanModels.swift", ".agents/skills/phoneagent/scripts/forward_rpc_localhost.py", "PhoneAgent/CalendarHostView.swift", "PhoneAgent/ContentView.swift", "PhoneAgent/Info.plist", "PhoneAgentUITests/CalendarBridge.swift", "PhoneAgentUITests/CalendarEventInput.swift",
+paths = ["PhoneAgentUITests/CalendarFeatures.swift", "PhoneAgentUITests/AdaptiveAlerts.swift", "PhoneAgent/PlanModels.swift", ".agents/skills/phoneagent/scripts/forward_rpc_localhost.py", "PhoneAgent/CalendarHostView.swift", "PhoneAgent/ContentView.swift", "PhoneAgent/Info.plist", "PhoneAgentUITests/CalendarBridge.swift", "PhoneAgentUITests/CalendarEventInput.swift",
          "PhoneAgentUITests/PhoneAgentUITests.swift", ".agents/skills/phoneagent/scripts/start_rpc_bridge_local.sh"]
 parts = []
 for name in paths:
@@ -15,12 +15,12 @@ for name in paths:
     after = (repo / name).read_text()
     parts.extend(difflib.unified_diff(before.splitlines(True), after.splitlines(True),
                  fromfile='a/' + name if before else '/dev/null', tofile='b/' + name))
-(root / "patches/phoneagent-alerts.patch").write_text(''.join(parts))
+(root / "patches/phoneagent-calendar-features.patch").write_text(''.join(parts))
 print('Exported portable patch without signing edits.')
 
 # Checked upgrades preserve the published Day 2 and Day 3 baseline patches.
 import tempfile
-for baseline in ("day2", "day3"):
+for baseline in ("day2", "day3", "alerts"):
     with tempfile.TemporaryDirectory() as tmp:
         archive = subprocess.Popen(["git", "archive", "HEAD"], cwd=repo, stdout=subprocess.PIPE)
         subprocess.run(["tar", "-x", "-C", tmp], stdin=archive.stdout, check=True)
@@ -34,4 +34,4 @@ for baseline in ("day2", "day3"):
             after = (repo / name).read_text()
             upgrade.extend(difflib.unified_diff(before.splitlines(True), after.splitlines(True),
                 fromfile='a/' + name if before else '/dev/null', tofile='b/' + name))
-        (root / f"patches/phoneagent-{baseline}-to-alerts.patch").write_text(''.join(upgrade))
+        (root / f"patches/phoneagent-{baseline}-to-calendar-features.patch").write_text(''.join(upgrade))

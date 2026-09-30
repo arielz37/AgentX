@@ -2,7 +2,7 @@
 import Foundation
 public enum EKAuthorizationStatus { case notDetermined, restricted, denied, fullAccess, writeOnly }
 public enum EKEntityType { case event }
-public enum EKSpan { case thisEvent }
+public enum EKSpan { case thisEvent, futureEvents }
 public enum EKAlarmProximity: Int { case none, enter, leave }
 public final class EKCalendar { public var allowsContentModifications = true; public init() {} }
 public final class EKAlarm {
@@ -22,7 +22,8 @@ public final class EKEvent {
     public var timeZone: TimeZone?
     public var isAllDay = false
     public var alarms: [EKAlarm]?
-    public var recurrenceRules: [String]?
+    public var recurrenceRules: [EKRecurrenceRule]?
+    public var url: URL?
     public var attendees: [String]?
     public var notes: String?
     public var eventIdentifier: String?
@@ -53,4 +54,37 @@ public final class EKEventStore {
         return e
     }
     public static func reset() { saves=0;queries=0;instances=0;events=[:];readTransform=nil;beforeSave=nil;failAfterSave=false;permission = .fullAccess }
+}
+
+public enum EKRecurrenceFrequency: Int { case daily, weekly, monthly, yearly }
+public enum EKWeekday: Int { case sunday = 1, monday, tuesday, wednesday, thursday, friday, saturday }
+public final class EKRecurrenceDayOfWeek {
+    public let dayOfTheWeek: EKWeekday
+    public let weekNumber = 0
+    public init(_ day: EKWeekday) { dayOfTheWeek = day }
+}
+public final class EKRecurrenceEnd {
+    public var occurrenceCount: Int
+    public var endDate: Date?
+    public init(occurrenceCount: Int) { self.occurrenceCount = occurrenceCount }
+    public init(end: Date) { endDate = end; occurrenceCount = 0 }
+}
+public final class EKRecurrenceRule {
+    public var frequency: EKRecurrenceFrequency
+    public var interval: Int
+    public var daysOfTheWeek: [EKRecurrenceDayOfWeek]?
+    public var daysOfTheMonth: [NSNumber]?
+    public var monthsOfTheYear: [NSNumber]?
+    public var weeksOfTheYear: [NSNumber]?
+    public var daysOfTheYear: [NSNumber]?
+    public var setPositions: [NSNumber]?
+    public var recurrenceEnd: EKRecurrenceEnd?
+    public let firstDayOfTheWeek = 2
+    public init(recurrenceWith frequency: EKRecurrenceFrequency, interval: Int,
+        daysOfTheWeek: [EKRecurrenceDayOfWeek]?, daysOfTheMonth: [NSNumber]?, monthsOfTheYear: [NSNumber]?,
+        weeksOfTheYear: [NSNumber]?, daysOfTheYear: [NSNumber]?, setPositions: [NSNumber]?, end: EKRecurrenceEnd?) {
+        self.frequency = frequency; self.interval = interval; self.daysOfTheWeek = daysOfTheWeek
+        self.daysOfTheMonth = daysOfTheMonth; self.monthsOfTheYear = monthsOfTheYear
+        self.weeksOfTheYear = weeksOfTheYear; self.daysOfTheYear = daysOfTheYear; self.setPositions = setPositions; recurrenceEnd = end
+    }
 }
