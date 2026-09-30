@@ -1,0 +1,291 @@
+{
+  "synthetic_only": true,
+  "phone_rpc_calls": 0,
+  "cases": [
+    {
+      "scope": "auto",
+      "text": "帮我发一封邮件约明天下午开会",
+      "expected": "unsupported",
+      "actual": "unsupported",
+      "passed": true,
+      "plan_present": false,
+      "review_status": "passed",
+      "elapsed_seconds": 7.82,
+      "response": {
+        "route": {
+          "kind": "unsupported",
+          "message": "抱歉，当前版本无法帮助发送邮件。",
+          "supported": [],
+          "unsupported": [
+            "发送邮件"
+          ]
+        },
+        "plan": null
+      }
+    },
+    {
+      "scope": "auto",
+      "text": "明天下午两点到三点提醒我给同事发邮件，不用额外提醒。",
+      "expected": "calendar",
+      "actual": "calendar",
+      "passed": true,
+      "plan_present": true,
+      "review_status": "passed",
+      "elapsed_seconds": 8.02,
+      "response": {
+        "route": {
+          "kind": "calendar",
+          "message": "为您创建明天下午两点到三点的日历提醒事项",
+          "supported": [
+            "calendar"
+          ],
+          "unsupported": []
+        },
+        "plan": {
+          "overflow": false,
+          "items": [
+            {
+              "item_id": "i1",
+              "kind": "appointment",
+              "fields": {
+                "title": {
+                  "value": "给同事发邮件",
+                  "source": "inferred",
+                  "evidence": "明天下午两点到三点提醒我给同事发邮件",
+                  "reason": "用户明确要求的事项内容，不是显式标题",
+                  "critical": true,
+                  "blocks_creation": false
+                },
+                "start_at": {
+                  "value": "2030-09-28T14:00:00+08:00",
+                  "source": "explicit",
+                  "evidence": "明天下午两点到三点提醒我给同事发邮件",
+                  "reason": "用户明确指定的开始时间",
+                  "critical": true,
+                  "blocks_creation": false
+                },
+                "end_at": {
+                  "value": "2030-09-28T15:00:00+08:00",
+                  "source": "explicit",
+                  "evidence": "明天下午两点到三点提醒我给同事发邮件",
+                  "reason": "用户明确指定的结束时间",
+                  "critical": true,
+                  "blocks_creation": false
+                },
+                "time_zone": {
+                  "value": "Asia/Shanghai",
+                  "source": "inferred",
+                  "evidence": null,
+                  "reason": "使用手机提交时区",
+                  "critical": false,
+                  "blocks_creation": false
+                },
+                "location": {
+                  "value": null,
+                  "source": "unresolved",
+                  "evidence": null,
+                  "reason": "用户未提供地点信息",
+                  "critical": false,
+                  "blocks_creation": false
+                }
+              },
+              "alerts": {
+                "mode": "disabled",
+                "evidence": "不用额外提醒",
+                "reason": "用户明确要求不需要额外提醒",
+                "count_limit": 0,
+                "no_extra": true,
+                "overflow": false,
+                "items": []
+              },
+              "calendar": {
+                "is_all_day": false,
+                "notes": null,
+                "url": null,
+                "recurrence": {
+                  "mode": "none",
+                  "frequency": null,
+                  "interval": 1,
+                  "weekdays": [],
+                  "month_days": [],
+                  "months": [],
+                  "end_type": "never",
+                  "count": null,
+                  "until": null,
+                  "evidence": null,
+                  "reason": "用户未要求重复"
+                },
+                "reason": "用户明确指定了具体的起止时间和内容",
+                "unsupported": []
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "scope": "calendar",
+      "text": "帮我写一封求职邮件",
+      "expected": "unsupported",
+      "actual": "unsupported",
+      "passed": true,
+      "plan_present": false,
+      "review_status": "passed",
+      "elapsed_seconds": 5.1,
+      "response": {
+        "route": {
+          "kind": "unsupported",
+          "message": "当前版本仅支持创建日程事项，不支持撰写或发送邮件。",
+          "supported": [],
+          "unsupported": [
+            "撰写邮件",
+            "发送邮件"
+          ]
+        },
+        "plan": null
+      }
+    },
+    {
+      "scope": "calendar",
+      "text": "帮我安排一次练琴，不用提醒。",
+      "expected": "calendar",
+      "actual": "calendar",
+      "passed": true,
+      "plan_present": true,
+      "review_status": "passed",
+      "elapsed_seconds": 8.68,
+      "response": {
+        "route": {
+          "kind": "calendar",
+          "message": "帮您安排一次练琴日程，不设置提醒。",
+          "supported": [
+            "calendar"
+          ],
+          "unsupported": []
+        },
+        "plan": {
+          "overflow": false,
+          "items": [
+            {
+              "item_id": "i1",
+              "kind": "flexible",
+              "fields": {
+                "title": {
+                  "value": "练琴",
+                  "source": "inferred",
+                  "evidence": null,
+                  "reason": "用户要求安排一次练琴",
+                  "critical": false,
+                  "blocks_creation": false
+                },
+                "start_at": {
+                  "value": "2030-09-28T09:00:00+08:00",
+                  "source": "defaulted",
+                  "evidence": null,
+                  "reason": "建议明天上午9点开始练琴",
+                  "critical": false,
+                  "blocks_creation": false
+                },
+                "end_at": {
+                  "value": "2030-09-28T10:00:00+08:00",
+                  "source": "defaulted",
+                  "evidence": null,
+                  "reason": "建议练琴1小时结束",
+                  "critical": false,
+                  "blocks_creation": false
+                },
+                "time_zone": {
+                  "value": "Asia/Shanghai",
+                  "source": "inferred",
+                  "evidence": null,
+                  "reason": "使用手机提交时区",
+                  "critical": false,
+                  "blocks_creation": false
+                },
+                "location": {
+                  "value": null,
+                  "source": "unresolved",
+                  "evidence": null,
+                  "reason": "用户未指定地点",
+                  "critical": false,
+                  "blocks_creation": false
+                }
+              },
+              "alerts": {
+                "mode": "disabled",
+                "evidence": "不用提醒",
+                "reason": "用户明确表示不用提醒",
+                "count_limit": 0,
+                "no_extra": true,
+                "overflow": false,
+                "items": []
+              },
+              "calendar": {
+                "is_all_day": false,
+                "notes": null,
+                "url": null,
+                "recurrence": {
+                  "mode": "none",
+                  "frequency": null,
+                  "interval": 1,
+                  "weekdays": [],
+                  "month_days": [],
+                  "months": [],
+                  "end_type": "never",
+                  "count": null,
+                  "until": null,
+                  "evidence": null,
+                  "reason": "用户未要求重复"
+                },
+                "reason": "无备注，非全天，用户未指定重复频率",
+                "unsupported": []
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "scope": "auto",
+      "text": "明天下午两点到三点练琴，不用提醒。再帮我发送一封邮件。",
+      "expected": "mixed",
+      "actual": "mixed",
+      "passed": true,
+      "plan_present": false,
+      "review_status": "passed",
+      "elapsed_seconds": 5.53,
+      "response": {
+        "route": {
+          "kind": "mixed",
+          "message": "支持创建练琴日程，但邮件发送功能暂不支持。请单独提交日程请求。",
+          "supported": [
+            "calendar"
+          ],
+          "unsupported": [
+            "发送邮件"
+          ]
+        },
+        "plan": null
+      }
+    },
+    {
+      "scope": "auto",
+      "text": "帮我弄一下吧",
+      "expected": "clarify",
+      "actual": "clarify",
+      "passed": true,
+      "plan_present": false,
+      "review_status": "passed",
+      "elapsed_seconds": 4.27,
+      "response": {
+        "route": {
+          "kind": "clarify",
+          "message": "请具体说明您需要帮忙创建什么日程或提醒，我可以帮您安排。",
+          "supported": [],
+          "unsupported": []
+        },
+        "plan": null
+      }
+    }
+  ]
+}

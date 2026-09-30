@@ -1,0 +1,72 @@
+{
+  "source": "Actual AgentX RPC reports; device/task/event identifiers and original text omitted. Full reports remain in ignored data directory.",
+  "records": [
+    {
+      "module": "calendar",
+      "state": "verified",
+      "message": "1/1 项保存并验证；1 项事件已保存，日历字段与提醒详情见报告",
+      "model_review": "passed",
+      "model_elapsed_seconds": 10.482,
+      "execution_attempt_count": 1,
+      "phone_execution_location": "iphone_native_app",
+      "host": {
+        "application_state": "foreground",
+        "background_budget_seconds": -1,
+        "can_execute": true,
+        "import_armed": true,
+        "window_remaining_seconds": 25.86326491832733
+      },
+      "items": [
+        {
+          "item_id": "i1",
+          "status": "verified",
+          "save_status": "saved",
+          "verification_status": "verified",
+          "saved_at": "2026-09-29T15:08:40.336Z",
+          "verified_at": "2026-09-29T15:08:40.344Z",
+          "readback": {
+            "title": "AgentX Test 整理书架",
+            "start_at": "2026-10-02T07:00:00.000Z",
+            "end_at": "2026-10-02T08:00:00.000Z",
+            "time_zone": "Asia/Shanghai",
+            "alarm_count": 0,
+            "recurrence_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "module": "calendar",
+      "state": "failed",
+      "message": "模型未完成，日历未执行：model_timeout_or_network_error; no automatic retry",
+      "model_review": "failed",
+      "model_elapsed_seconds": 9.901,
+      "execution_attempt_count": 0,
+      "phone_execution_location": null,
+      "host": null,
+      "items": []
+    },
+    {
+      "module": "calendar",
+      "state": "scope_mismatch",
+      "message": "当前版本无法帮您撰写或发送邮件。",
+      "model_review": "passed",
+      "model_elapsed_seconds": 6.679,
+      "execution_attempt_count": 0,
+      "phone_execution_location": null,
+      "host": null,
+      "items": []
+    },
+    {
+      "module": "calendar",
+      "state": "failed",
+      "message": "模型未完成，日历未执行：worker_restarted_during_parse; no automatic retry",
+      "model_review": null,
+      "model_elapsed_seconds": null,
+      "execution_attempt_count": 0,
+      "phone_execution_location": null,
+      "host": null,
+      "items": []
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "new_app_installed": true,
+  "old_app_still_installed": true,
+  "distinct_bundle_ids": true,
+  "agentx_status": {
+    "app_id": "agentx",
+    "protocol_version": 1,
+    "authorization": "full_access",
+    "execution_location": "iphone_native_app"
+  },
+  "missing_client_identity_rejected": true
+}
